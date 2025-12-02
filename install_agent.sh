@@ -22,7 +22,7 @@ echo "------------------------------------------------"
 
 # --- CONFIGURATION ---
 # Target Image from GitHub Container Registry
-IMAGE_NAME="ghcr.io/syssentinel/agent-ts:latest"
+IMAGE_NAME="ghcr.io/syssentinel/agent:latest"
 
 # 1. Check for Docker
 if ! command -v docker &> /dev/null; then
