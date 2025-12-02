@@ -21,7 +21,7 @@ export VPS_ID="your-vps-id"
 export API_KEY="your-api-key"
 export API_ENDPOINT="https://api.sys-sentinel.com/api/ingest/stats"
 
-curl -sL https://sys-sentinel.com/install.sh | sudo -E bash
+curl -sL https://raw.githubusercontent.com/SysSentinel/agent-ts/main/install_agent.sh | sudo -E bash -
 ```
 
 
@@ -42,7 +42,7 @@ docker run -d \
   -e VPS_ID="<YOUR_VPS_ID>" \
   -e API_KEY="<YOUR_API_KEY>" \
   -e API_ENDPOINT="https://api.sys-sentinel.com/api/ingest/stats" \
-  
+  ghcr.io/syssentinel/agent-ts:latest
 ```
 
 ## **⚙️ Configuration**
