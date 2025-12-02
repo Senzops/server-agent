@@ -1,13 +1,14 @@
 import si from 'systeminformation';
-import { TelemetryPayload } from '../types/telemetry';
+import { ContainerStats, TelemetryPayload } from '../types/telemetry';
 import { logger } from '../utils/logger';
 
 export class MonitorService {
   /**
-   * Collects comprehensive system metrics
+   * Collects comprehensive system metrics including Docker stats
    */
   public async collectStats(): Promise<TelemetryPayload | null> {
     try {
+      // 1. Parallelize data fetching (excluding docker for safety first)
       const [osInfo, cpu, currentLoad, mem, fsSize, networkStats, time] = await Promise.all([
         si.osInfo(),
         si.cpu(),
@@ -17,6 +18,37 @@ export class MonitorService {
         si.networkStats(),
         si.time(),
       ]);
+
+      // 2. Fetch Docker Stats (Safely)
+      let dockerStats: ContainerStats[] = [];
+      try {
+        // '*' fetches stats for all running containers
+        const rawDocker = await si.dockerContainerStats('*');
+
+        dockerStats = rawDocker.map((c: any) => ({
+          id: c.id,
+          name: c.name,
+          image: c.image,
+          state: c.state,
+          cpuPercent: c.cpu_percent,
+          memoryUsage: c.mem_usage,
+          memoryLimit: c.mem_limit,
+          memoryPercent: c.mem_percent,
+          netIO: {
+            rx: c.net_rx,
+            tx: c.net_tx,
+          },
+          blockIO: {
+            read: c.block_read,
+            write: c.block_write,
+          }
+        }));
+      } catch (dockerError) {
+        // This is not critical; user might not have Docker or permissions
+        // logger.warn('Docker stats could not be collected (socket likely missing)');
+      }
+
+      // 3. Process System Data
 
       // Get primary disk (usually mounted on /)
       const mainDisk = fsSize.length > 0 ? fsSize[0] : { size: 0, used: 0, use: 0, fs: 'N/A' };
@@ -57,6 +89,7 @@ export class MonitorService {
           bytesSentSec: netTx,
           interfaceName: 'aggregate',
         },
+        docker: dockerStats, // Added here
         uptimeSeconds: time.uptime,
         timestamp: new Date().toISOString(),
       };
