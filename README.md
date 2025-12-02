@@ -12,12 +12,12 @@
 
 ## **🛠 Installation (For Users)**
 
-### **Option 1: The One-Line Installer (Recommended)**
+### **Option 1: One-Line Installer (Recommended)**
 
-This script detects your OS, installs Docker (if missing), and configures the agent.
+This script automatically detects your operating system, installs Docker (if required), and configures the SysSentinel agent.
 
 ```sh
-# Replace variables with your actual dashboard credentials
+# Replace the variables below with your actual SysSentinel dashboard credentials
 export VPS_ID="your-vps-id"
 export API_KEY="your-api-key"
 export API_ENDPOINT="https://api.sys-sentinel.com/api/ingest/stats"
@@ -25,7 +25,17 @@ export API_ENDPOINT="https://api.sys-sentinel.com/api/ingest/stats"
 curl -sL https://raw.githubusercontent.com/SysSentinel/agent/main/install_agent.sh | sudo -E bash -
 ```
 
-### **Option 2: Manual Docker Run**
+### **Option 2: Interactive Installation**
+
+Download the script manually, review it if desired, then run it interactively.
+
+```sh
+curl -sLO https://raw.githubusercontent.com/SysSentinel/agent/main/install_agent.sh
+chmod +x install_agent.sh
+sudo -E ./install_agent.sh
+```
+
+### **Option 3: Manual Docker Run**
 
 If you prefer to run the container manually:
 
