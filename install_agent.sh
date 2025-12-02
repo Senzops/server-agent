@@ -21,11 +21,8 @@ echo "Welcome to the SysSentinel Agent Installer."
 echo "------------------------------------------------"
 
 # --- CONFIGURATION ---
-GITHUB_REPO="SysSentinel/agent-ts"
-IMAGE_NAME="ghcr.io/$GITHUB_REPO:latest"
-
-# Convert to lowercase because Docker images must be lowercase
-IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+# Target Image from GitHub Container Registry
+IMAGE_NAME="ghcr.io/syssentinel/agent-ts:latest"
 
 # 1. Check for Docker
 if ! command -v docker &> /dev/null; then
@@ -35,7 +32,6 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # 2. Configuration Prompts
-# In a real production app, you might pass these as flags to this script
 if [ -z "$VPS_ID" ]; then
     read -p "Enter your VPS ID: " VPS_ID
 fi
@@ -45,7 +41,6 @@ if [ -z "$API_KEY" ]; then
 fi
 
 if [ -z "$API_ENDPOINT" ]; then
-    # Default to localhost for dev, change to your production URL later
     read -p "Enter API Endpoint (Default: http://localhost:3000/api/ingest/stats): " API_ENDPOINT
     API_ENDPOINT=${API_ENDPOINT:-http://localhost:3000/api/ingest/stats}
 fi
@@ -59,10 +54,15 @@ if [ "$(docker ps -q -f name=sys-sentinel)" ]; then
     docker rm sys-sentinel
 fi
 
-# 4. Build/Pull and Run
-# NOTE: In production, replace 'docker build' with 'docker pull your-repo/sys-sentinel:latest'
-echo "Building SysSentinel Agent..."
-docker build -t sys-sentinel-agent .
+# 4. Pull Latest Image from GHCR
+echo "Pulling latest SysSentinel image from GitHub Container Registry..."
+echo "Target: $IMAGE_NAME"
+docker pull $IMAGE_NAME
+
+if [ $? -ne 0 ]; then
+    echo -e "${RED}Error: Failed to pull image. Please check if the repository/package is Public.${NC}"
+    exit 1
+fi
 
 echo -e "\n${GREEN}Starting SysSentinel...${NC}"
 
