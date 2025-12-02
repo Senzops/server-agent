@@ -42,7 +42,7 @@ docker run -d \
   -e VPS_ID="<YOUR_VPS_ID>" \
   -e API_KEY="<YOUR_API_KEY>" \
   -e API_ENDPOINT="https://api.sys-sentinel.com/api/ingest/stats" \
-  sys-sentinel-agent:latest
+  
 ```
 
 ## **⚙️ Configuration**

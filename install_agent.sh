@@ -20,6 +20,13 @@ echo -e "${NC}"
 echo "Welcome to the SysSentinel Agent Installer."
 echo "------------------------------------------------"
 
+# --- CONFIGURATION ---
+GITHUB_REPO="SysSentinel/agent-ts"
+IMAGE_NAME="ghcr.io/$GITHUB_REPO:latest"
+
+# Convert to lowercase because Docker images must be lowercase
+IMAGE_NAME=$(echo "$IMAGE_NAME" | tr '[:upper:]' '[:lower:]')
+
 # 1. Check for Docker
 if ! command -v docker &> /dev/null; then
     echo -e "${RED}[Error] Docker is not installed.${NC}"
@@ -74,7 +81,7 @@ docker run -d \
   -e API_KEY="$API_KEY" \
   -e API_ENDPOINT="$API_ENDPOINT" \
   -e INTERVAL=60 \
-  sys-sentinel-agent
+  $IMAGE_NAME
 
 if [ $? -eq 0 ]; then
     echo -e "\n${GREEN}✔ Agent installed and running successfully!${NC}"
