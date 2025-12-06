@@ -1,5 +1,5 @@
 {
-  "name": "sys-sentinel-agent",
+  "name": "senzor-agent",
   "version": "1.0.0",
   "description": "TypeScript Agent for VPS Monitoring",
   "main": "dist/index.js",

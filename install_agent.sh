@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# --- SysSentinel Installer ---
+# --- senzor Installer ---
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -8,21 +8,20 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}"
-echo "   _____            _____            _   _            _ "
-echo "  / ____|          / ____|          | | (_)          | |"
-echo " | (___  _   _ ___| (___   ___ _ __ | |_ _ _ __   ___| |"
-echo "  \___ \| | | / __|\___ \ / _ \ '_ \| __| | '_ \ / _ \ |"
-echo "  ____) | |_| \__ \____) |  __/ | | | |_| | | | |  __/ |"
-echo " |_____/ \__, |___/_____/ \___|_| |_|\__|_|_| |_|\___|_|"
-echo "          __/ |                                         "
-echo "         |___/                                          "
+echo "   _____ "
+echo "  / ____| "
+echo " | (___   ___ _ __  _______  _ __ "
+echo "  \___ \ / _ \ '_ \|_  / _ \| '__|"
+echo "  ____) |  __/ | | |/ / (_) | | "
+echo " |_____/ \___|_| |_/___|\___/|_| "
+echo " "
 echo -e "${NC}"
-echo "Welcome to the SysSentinel Agent Installer."
+echo "Welcome to the Senzor Server Agent Installer."
 echo "------------------------------------------------"
 
 # --- CONFIGURATION ---
 # Target Image from GitHub Container Registry
-IMAGE_NAME="ghcr.io/syssentinel/agent:latest"
+IMAGE_NAME="ghcr.io/senzops/server-agent:latest"
 
 # 1. Check for Docker
 if ! command -v docker &> /dev/null; then
@@ -32,8 +31,8 @@ if ! command -v docker &> /dev/null; then
 fi
 
 # 2. Configuration Prompts
-if [ -z "$VPS_ID" ]; then
-    read -p "Enter your VPS ID: " VPS_ID
+if [ -z "$SERVER_ID" ]; then
+    read -p "Enter your VPS ID: " SERVER_ID
 fi
 
 if [ -z "$API_KEY" ]; then
@@ -41,21 +40,21 @@ if [ -z "$API_KEY" ]; then
 fi
 
 if [ -z "$API_ENDPOINT" ]; then
-    read -p "Enter API Endpoint (Default: https://api.sys-sentinel.com/api/ingest/stats): " API_ENDPOINT
-    API_ENDPOINT=${API_ENDPOINT:-https://api.sys-sentinel.com/api/ingest/stats}
+    read -p "Enter API Endpoint (Default: https://api.senzor.dev/api/ingest/stats): " API_ENDPOINT
+    API_ENDPOINT=${API_ENDPOINT:-https://api.senzor.dev/api/ingest/stats}
 fi
 
 echo -e "\n${BLUE}Configuring Agent...${NC}"
 
 # 3. Stop existing container if running
-if [ "$(docker ps -q -f name=sys-sentinel)" ]; then
+if [ "$(docker ps -q -f name=senzor)" ]; then
     echo "Stopping existing agent..."
-    docker stop sys-sentinel
-    docker rm sys-sentinel
+    docker stop senzor
+    docker rm senzor
 fi
 
 # 4. Pull Latest Image from GHCR
-echo "Pulling latest SysSentinel image from GitHub Container Registry..."
+echo "Pulling latest senzor image from GitHub Container Registry..."
 echo "Target: $IMAGE_NAME"
 docker pull $IMAGE_NAME
 
@@ -64,12 +63,12 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-echo -e "\n${GREEN}Starting SysSentinel...${NC}"
+echo -e "\n${GREEN}Starting senzor...${NC}"
 
 # 5. THE RUN COMMAND
 # We mount host directories strictly read-only (:ro) for security
 docker run -d \
-  --name sys-sentinel \
+  --name senzor \
   --restart unless-stopped \
   --network host \
   --pid host \
@@ -77,7 +76,7 @@ docker run -d \
   -v /sys:/host/sys:ro \
   -v /proc:/host/proc:ro \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -e VPS_ID="$VPS_ID" \
+  -e SERVER_ID="$SERVER_ID" \
   -e API_KEY="$API_KEY" \
   -e API_ENDPOINT="$API_ENDPOINT" \
   -e INTERVAL=60 \
@@ -85,7 +84,7 @@ docker run -d \
 
 if [ $? -eq 0 ]; then
     echo -e "\n${GREEN}✔ Agent installed and running successfully!${NC}"
-    echo "Logs: docker logs -f sys-sentinel"
+    echo "Logs: docker logs -f senzor"
 else
     echo -e "\n${RED}✘ Failed to start agent.${NC}"
 fi

@@ -1,6 +1,6 @@
-# **SysSentinel Agent**
+# **Senzor Server Agent**
 
-**SysSentinel Agent** is a lightweight, secure, and reliable telemetry collector designed for VPS and Server infrastructure. Written in TypeScript and distributed via Docker, it ensures minimal footprint while providing production-grade monitoring.
+**Senzor Server Agent** is a lightweight, secure, and reliable telemetry collector designed for Server infrastructure. Written in TypeScript and distributed via Docker, it ensures minimal footprint while providing production-grade monitoring.
 
 ## **🚀 Features**
 
@@ -14,15 +14,15 @@
 
 ### **Option 1: One-Line Installer (Recommended)**
 
-This script automatically detects your operating system, installs Docker (if required), and configures the SysSentinel agent.
+This script automatically detects your operating system, installs Docker (if required), and configures the Senzor agent.
 
 ```sh
-# Replace the variables below with your actual SysSentinel dashboard credentials
-export VPS_ID="your-vps-id"
+# Replace the variables below with your actual Senzor dashboard credentials
+export SERVER_ID="your-server-id"
 export API_KEY="your-api-key"
-export API_ENDPOINT="https://api.sys-sentinel.com/api/ingest/stats"
+export API_ENDPOINT="https://api.senzor.dev/api/ingest/stats"
 
-curl -sL https://raw.githubusercontent.com/SysSentinel/agent/main/install_agent.sh | sudo -E bash -
+curl -sL https://raw.githubusercontent.com/senzops/server-agent/main/install_agent.sh | sudo -E bash -
 ```
 
 ### **Option 2: Interactive Installation**
@@ -30,7 +30,7 @@ curl -sL https://raw.githubusercontent.com/SysSentinel/agent/main/install_agent.
 Download the script manually, review it if desired, then run it interactively.
 
 ```sh
-curl -sLO https://raw.githubusercontent.com/SysSentinel/agent/main/install_agent.sh
+curl -sLO https://raw.githubusercontent.com/senzops/server-agent/main/install_agent.sh
 chmod +x install_agent.sh
 sudo -E ./install_agent.sh
 ```
@@ -41,7 +41,7 @@ If you prefer to run the container manually:
 
 ```sh
 docker run -d \
-  --name sys-sentinel \
+  --name senzor \
   --restart unless-stopped \
   --network host \
   --pid host \
@@ -51,40 +51,40 @@ docker run -d \
   -v /sys:/host/sys:ro \
   -v /proc:/host/proc:ro \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
-  -e VPS_ID="<YOUR_VPS_ID>" \
+  -e SERVER_ID="<YOUR_SERVER_ID>" \
   -e API_KEY="<YOUR_API_KEY>" \
-  -e API_ENDPOINT="https://api.sys-sentinel.com/api/ingest/stats" \
-  ghcr.io/syssentinel/agent:latest
+  -e API_ENDPOINT="https://api.senzor.dev/api/ingest/stats" \
+  ghcr.io/senzops/server-agent:latest
 ```
 
 ### **Option 4: Coolify Deployment Setup**
 
-1. Docker Image: `ghcr.io/syssentinel/agent`
+1. Docker Image: `ghcr.io/senzops/server-agent`
 2. Custom Docker Options :
 
 ```
---name sys-sentinel --restart unless-stopped --network host --pid host --memory="150m" --cpus="0.1" -v /:/host/root:ro -v /sys:/host/sys:ro -v /proc:/host/proc:ro -v /var/run/docker.sock:/var/run/docker.sock:ro
+--name senzor --restart unless-stopped --network host --pid host --memory="150m" --cpus="0.1" -v /:/host/root:ro -v /sys:/host/sys:ro -v /proc:/host/proc:ro -v /var/run/docker.sock:/var/run/docker.sock:ro
 ```
 
 3. Add the following environment variables in **Environment Variables**:
 
 ```.env
-VPS_ID="<YOUR_VPS_ID>"
+SERVER_ID="<YOUR_SERVER_ID>"
 API_KEY="<YOUR_API_KEY>"
-API_ENDPOINT="https://api.sys-sentinel.com/api/ingest/stats"
+API_ENDPOINT="https://api.senzor.dev/api/ingest/stats"
 ```
 
 ## **⚙️ Configuration**
 
 The agent is configured entirely via Environment Variables.
 
-| Variable     | Description                               | Default             | Required |
-| :----------- | :---------------------------------------- | :------------------ | :------- |
-| VPS_ID       | Unique ID from your SysSentinel Dashboard | null                | **Yes**  |
-| API_KEY      | Secret Key for authentication             | null                | **Yes**  |
-| API_ENDPOINT | The ingest URL of the backend             | http://localhost... | **Yes**  |
-| INTERVAL     | Time between checks (in seconds)          | 60                  | No       |
-| NODE_ENV     | Environment mode                          | production          | No       |
+| Variable     | Description                          | Default             | Required |
+| :----------- | :----------------------------------- | :------------------ | :------- |
+| SERVER_ID    | Unique ID from your Senzor Dashboard | null                | **Yes**  |
+| API_KEY      | Secret Key for authentication        | null                | **Yes**  |
+| API_ENDPOINT | The ingest URL of the backend        | http://localhost... | **Yes**  |
+| INTERVAL     | Time between checks (in seconds)     | 60                  | No       |
+| NODE_ENV     | Environment mode                     | production          | No       |
 
 ## **💻 Development Setup**
 
@@ -93,7 +93,7 @@ To contribute to the agent or build it locally:
 1. **Clone & Install**
 
 ```sh
- git clone https://github.com/SysSentinel/agent.git
+ git clone https://github.com/senzops/server-agent.git
  cd agent
  npm install
 ```
@@ -102,8 +102,8 @@ To contribute to the agent or build it locally:
    Create a `.env` file in the root:
 
    ```.env
-   API_ENDPOINT=https://api.sys-sentinel.com/api/ingest/stats
-   VPS_ID=test-vps-id
+   API_ENDPOINT=https://api.senzor.dev/api/ingest/stats
+   SERVER_ID=test-server-id
    API_KEY=test-api-key
    INTERVAL=5
    ```
@@ -122,7 +122,7 @@ To contribute to the agent or build it locally:
 
 5. **Build Docker Image**
    ```sh
-   docker build -t sys-sentinel-agent .
+   docker build -t senzor-agent .
    ```
 
 ## **🔒 Security Architecture**
@@ -137,7 +137,7 @@ Logs:
 View the agent logs to see connection status:
 
 ```sh
-docker logs -f sys-sentinel
+docker logs -f senzor
 ```
 
 "Connection Refused":  

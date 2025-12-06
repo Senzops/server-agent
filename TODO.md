@@ -6,7 +6,7 @@ This section tracks the tasks required to move from "Local Development" to "Publ
 
 - [x] Create `.github/workflows/docker-publish.yml` to build & push to GHCR.
 - [x] Push code to `main` branch to trigger first build.
-- [x] Verify image exists at `ghcr.io/syssentinel/agent:latest`.
+- [x] Verify image exists at `ghcr.io/senzops/server-agent:latest`.
 - [x] **Important**: Go to GitHub Package Settings and change visibility to **Public**.
 
 ### **Phase 2: Distribution**
