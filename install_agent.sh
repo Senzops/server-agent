@@ -32,7 +32,7 @@ fi
 
 # 2. Configuration Prompts
 if [ -z "$SERVER_ID" ]; then
-    read -p "Enter your VPS ID: " SERVER_ID
+    read -p "Enter your SERVER ID: " SERVER_ID
 fi
 
 if [ -z "$API_KEY" ]; then

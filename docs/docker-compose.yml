@@ -25,7 +25,7 @@ services:
       - API_ENDPOINT=https://api.senzor.dev/api/ingest/stats
 
       # 2. Authentication (Get these from your Dashboard)
-      - VPS_ID=REPLACE_WITH_YOUR_VPS_ID
+      - SERVER_ID=REPLACE_WITH_YOUR_SERVER_ID
       - API_KEY=REPLACE_WITH_YOUR_API_KEY
 
       # 3. Settings

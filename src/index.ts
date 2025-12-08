@@ -10,7 +10,7 @@ const monitorService = new MonitorService();
 const runAgent = async () => {
   try {
     validateConfig();
-    logger.info(`Starting Senzor Agent for VPS: ${config.agent.vpsId}`);
+    logger.info(`Starting Senzor Agent for SERVER: ${config.agent.vpsId}`);
 
     // Main Loop
     while (true) {
