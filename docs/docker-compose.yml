@@ -38,6 +38,13 @@ services:
       - ENABLE_NGINX=false
       - NGINX_STATUS_URL=http://127.0.0.1/nginx_status
 
+      # 5. Traefik (Opt-in)
+      - ENABLE_TRAEFIK=false
+      - TRAEFIK_API_URL=http://127.0.0.1:8080 
+      # Optional: Only if Traefik dashboard is protected
+      # - TRAEFIK_USER=admin
+      # - TRAEFIK_PASSWORD=secure_password
+
     # Resource Limits (Safety Guardrails)
     # Ensures the agent never consumes too much of your server's resources
     deploy:

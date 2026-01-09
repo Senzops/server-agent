@@ -1,13 +1,18 @@
 import { NginxIntegration } from './nginx';
 import { config } from '../config/env';
+import { TraefikIntegration } from './traefik';
 
 export class IntegrationManager {
   private integrations: any[] = [];
 
   constructor() {
-    // 1. Initialize Nginx
+    // Nginx
     if (config.integrations.nginx.enabled) {
       this.integrations.push(new NginxIntegration(config.integrations.nginx));
+    }
+    // Traefik
+    if (config.integrations.traefik.enabled) {
+      this.integrations.push(new TraefikIntegration(config.integrations.traefik));
     }
   }
 

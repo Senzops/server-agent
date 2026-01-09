@@ -72,6 +72,19 @@ export interface NginxStats {
   reqPerSec: number; // Calculated
 }
 
+export interface TraefikComponentStats {
+  total: number;
+  active: number;
+  failed: number;
+}
+
+export interface TraefikStats {
+  uptimeSeconds?: number; // Calculated if possible, or null
+  routers: TraefikComponentStats;
+  services: TraefikComponentStats;
+  middlewares: TraefikComponentStats;
+}
+
 export interface TelemetryPayload {
   os: OsStats;
   cpu: CpuStats;
@@ -84,4 +97,5 @@ export interface TelemetryPayload {
   timestamp: string;
 
   nginx?: NginxStats | null;
+  traefik?: TraefikStats | null;
 }

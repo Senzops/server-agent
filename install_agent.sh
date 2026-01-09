@@ -8,15 +8,15 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}"
-echo "   _____ "
-echo "  / ____| "
-echo " | (___   ___ _ __  ____  ___  _ __ "
-echo "  \___ \ / _ \ '_ \|_  / / _ \| '__|"
-echo "  ____) |  __/ | | |/ / | (_) | | "
-echo " |_____/ \___|_| |_/___| \___/|_| "
-echo " "
+echo "   _____                               "
+echo "  / ____|                              "
+echo " | (___   ___ _ __  ____ ___  _ __     "
+echo "  \___ \ / _ \ '_ \|_  // _ \| '__|    "
+echo "  ____) |  __/ | | |/ /| (_) | |       "
+echo " |_____/ \___|_| |_/___|\___/|_|       "
+echo "                                       "
 echo -e "${NC}"
-echo "Welcome to the Senzor Server Agent Installer."
+echo "Welcome to the Senzor Agent Installer."
 echo "------------------------------------------------"
 
 # --- CONFIGURATION ---
@@ -58,6 +58,28 @@ else
     NGINX_STATUS_URL=""
 fi
 
+# Traefik
+read -p "Enable Traefik Monitoring? (y/N): " ENABLE_TRAEFIK
+if [[ "$ENABLE_TRAEFIK" =~ ^[Yy]$ ]]; then
+    ENABLE_TRAEFIK="true"
+    read -p "Traefik API URL (default: http://127.0.0.1:8080): " TRAEFIK_API_URL
+    TRAEFIK_API_URL=${TRAEFIK_API_URL:-http://127.0.0.1:8080}
+    
+    read -p "Does Traefik require Basic Auth? (y/N): " TRAEFIK_AUTH_ENABLED
+    if [[ "$TRAEFIK_AUTH_ENABLED" =~ ^[Yy]$ ]]; then
+        read -p "Traefik Username: " TRAEFIK_USER
+        read -p "Traefik Password: " TRAEFIK_PASSWORD
+    else
+        TRAEFIK_USER=""
+        TRAEFIK_PASSWORD=""
+    fi
+else
+    ENABLE_TRAEFIK="false"
+    TRAEFIK_API_URL=""
+    TRAEFIK_USER=""
+    TRAEFIK_PASSWORD=""
+fi
+
 echo -e "\n${BLUE}Configuring Agent...${NC}"
 
 # 3. Stop existing container if running
@@ -96,6 +118,10 @@ docker run -d \
   -e INTERVAL=60 \
   -e ENABLE_NGINX="$ENABLE_NGINX" \
   -e NGINX_STATUS_URL="$NGINX_STATUS_URL" \
+  -e ENABLE_TRAEFIK="$ENABLE_TRAEFIK" \
+  -e TRAEFIK_API_URL="$TRAEFIK_API_URL" \
+  -e TRAEFIK_USER="$TRAEFIK_USER" \
+  -e TRAEFIK_PASSWORD="$TRAEFIK_PASSWORD" \
   $IMAGE_NAME
 
 if [ $? -eq 0 ]; then

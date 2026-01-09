@@ -59,7 +59,11 @@ export class NginxIntegration extends BaseIntegration {
       };
 
     } catch (error: any) {
-      logger.warn(`[Nginx] Failed to collect stats: ${error.message}`);
+      // Suppress connection refused logs unless in debug mode to avoid spamming 
+      // if service is temporarily down
+      if (error.code !== 'ECONNREFUSED') {
+        logger.warn(`[Nginx] Failed to collect stats: ${error.message}`);
+      }
       return null;
     }
   }

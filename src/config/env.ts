@@ -14,8 +14,14 @@ export const config = {
   integrations: {
     nginx: {
       enabled: process.env.ENABLE_NGINX === 'true',
-      statusUrl: process.env.NGINX_STATUS_URL || "http://127.0.0.1/nginx_status"
+      statusUrl: process.env.NGINX_STATUS_URL || "http://127.0.0.1/nginx_status",
     },
+    traefik: {
+      enabled: process.env.ENABLE_TRAEFIK === 'true',
+      url: process.env.TRAEFIK_API_URL || "http://127.0.0.1:8080",
+      username: process.env.TRAEFIK_USER,
+      password: process.env.TRAEFIK_PASSWORD
+    }
   }
 };
 

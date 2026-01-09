@@ -118,6 +118,7 @@ export class MonitorService {
         timestamp: new Date().toISOString(),
 
         nginx: integrationData.nginx || null,
+        traefik: integrationData.traefik || null,
       };
 
       return payload;
