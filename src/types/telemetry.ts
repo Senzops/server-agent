@@ -61,6 +61,17 @@ export interface ProcessStats {
   sleeping: number;
 }
 
+export interface NginxStats {
+  activeConnections: number;
+  accepts: number;
+  handled: number;
+  requests: number;
+  reading: number;
+  writing: number;
+  waiting: number;
+  reqPerSec: number; // Calculated
+}
+
 export interface TelemetryPayload {
   os: OsStats;
   cpu: CpuStats;
@@ -71,4 +82,6 @@ export interface TelemetryPayload {
   docker: ContainerStats[]; // Array of containers
   uptimeSeconds: number;
   timestamp: string;
+
+  nginx?: NginxStats | null;
 }

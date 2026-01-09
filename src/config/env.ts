@@ -11,6 +11,12 @@ export const config = {
     vpsId: process.env.SERVER_ID,
     interval: parseInt(process.env.INTERVAL || '60', 10),
   },
+  integrations: {
+    nginx: {
+      enabled: process.env.ENABLE_NGINX === 'true',
+      statusUrl: process.env.NGINX_STATUS_URL || "http://127.0.0.1/nginx_status"
+    },
+  }
 };
 
 export const validateConfig = () => {

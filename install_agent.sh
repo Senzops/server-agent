@@ -10,10 +10,10 @@ NC='\033[0m' # No Color
 echo -e "${BLUE}"
 echo "   _____ "
 echo "  / ____| "
-echo " | (___   ___ _ __  _______  _ __ "
-echo "  \___ \ / _ \ '_ \|_  / _ \| '__|"
-echo "  ____) |  __/ | | |/ / (_) | | "
-echo " |_____/ \___|_| |_/___|\___/|_| "
+echo " | (___   ___ _ __  ____  ___  _ __ "
+echo "  \___ \ / _ \ '_ \|_  / / _ \| '__|"
+echo "  ____) |  __/ | | |/ / | (_) | | "
+echo " |_____/ \___|_| |_/___| \___/|_| "
 echo " "
 echo -e "${NC}"
 echo "Welcome to the Senzor Server Agent Installer."
@@ -42,6 +42,20 @@ fi
 if [ -z "$API_ENDPOINT" ]; then
     read -p "Enter API Endpoint (Default: https://api.senzor.dev/api/ingest/stats): " API_ENDPOINT
     API_ENDPOINT=${API_ENDPOINT:-https://api.senzor.dev/api/ingest/stats}
+fi
+
+#  Advanced Integrations (Opt-In)
+echo -e "\n--- Integrations (Optional) ---"
+
+# Nginx
+read -p "Enable Nginx Monitoring? (y/N): " ENABLE_NGINX
+if [[ "$ENABLE_NGINX" =~ ^[Yy]$ ]]; then
+    ENABLE_NGINX="true"
+    read -p "Nginx Status URL (default: http://127.0.0.1/nginx_status): " NGINX_STATUS_URL
+    NGINX_STATUS_URL=${NGINX_STATUS_URL:-http://127.0.0.1/nginx_status}
+else
+    ENABLE_NGINX="false"
+    NGINX_STATUS_URL=""
 fi
 
 echo -e "\n${BLUE}Configuring Agent...${NC}"
@@ -80,6 +94,8 @@ docker run -d \
   -e API_KEY="$API_KEY" \
   -e API_ENDPOINT="$API_ENDPOINT" \
   -e INTERVAL=60 \
+  -e ENABLE_NGINX="$ENABLE_NGINX" \
+  -e NGINX_STATUS_URL="$NGINX_STATUS_URL" \
   $IMAGE_NAME
 
 if [ $? -eq 0 ]; then

@@ -54,6 +54,8 @@ docker run -d \
   -e SERVER_ID="<YOUR_SERVER_ID>" \
   -e API_KEY="<YOUR_API_KEY>" \
   -e API_ENDPOINT="https://api.senzor.dev/api/ingest/stats" \
+  -e ENABLE_NGINX="$ENABLE_NGINX" \
+  -e NGINX_STATUS_URL="$NGINX_STATUS_URL" \
   ghcr.io/senzops/server-agent:latest
 ```
 
@@ -61,13 +63,14 @@ docker run -d \
 
 **Find the [docker-compose.yml](./docs/docker-compose.yml)**
 
-1. **Download the file**: Save the  above linked file as `docker-compose.yml` on your server.
+1. **Download the file**: Save the above linked file as `docker-compose.yml` on your server.
 2. **Edit Credentials**: Open the file and replace the placeholders with your actual IDs from the dashboard:
 
 ```.env
 SERVER_ID="<YOUR_SERVER_ID>"
 API_KEY="<YOUR_API_KEY>"
 API_ENDPOINT="https://api.senzor.dev/api/ingest/stats"
+ENABLE_NGINX=true
 ```
 
 3. **Start the Agent**:
@@ -97,6 +100,7 @@ docker-compose logs -f
 SERVER_ID="<YOUR_SERVER_ID>"
 API_KEY="<YOUR_API_KEY>"
 API_ENDPOINT="https://api.senzor.dev/api/ingest/stats"
+ENABLE_NGINX=true
 ```
 
 ## **⚙️ Configuration**

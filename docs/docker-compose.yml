@@ -32,6 +32,12 @@ services:
       - INTERVAL=60 # Seconds between checks
       - NODE_ENV=production
 
+      # 4. Integrations (Opt-in)
+      # To enable Nginx monitoring, set ENABLE_NGINX to true and provide the status URL
+      # Ensure your Nginx is configured with the 'stub_status' module reachable at this URL
+      - ENABLE_NGINX=false
+      - NGINX_STATUS_URL=http://127.0.0.1/nginx_status
+
     # Resource Limits (Safety Guardrails)
     # Ensures the agent never consumes too much of your server's resources
     deploy:

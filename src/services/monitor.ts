@@ -1,8 +1,16 @@
 import si from 'systeminformation';
 import { ContainerStats, TelemetryPayload } from '../types/telemetry';
 import { logger } from '../utils/logger';
+import { IntegrationManager } from '../integrations/manager';
 
 export class MonitorService {
+
+  private integrationManager: IntegrationManager;
+
+  constructor() {
+    this.integrationManager = new IntegrationManager();
+  }
+
   /**
    * Collects comprehensive system metrics including Docker stats
    */
@@ -10,7 +18,7 @@ export class MonitorService {
     try {
       // Parallelize data fetching (excluding docker for safety first)
       const [osInfo, cpu, currentLoad, mem, fsSize, networkStats, time,
-        processes, latency] = await Promise.all([
+        processes, latency, integrationData] = await Promise.all([
           si.osInfo(),
           si.cpu(),
           si.currentLoad(),
@@ -20,6 +28,7 @@ export class MonitorService {
           si.time(),
           si.processes(),
           si.inetLatency(),
+          this.integrationManager.collectAll()
         ]);
 
       // Fetch Docker Data (Metadata + Stats)
@@ -107,6 +116,8 @@ export class MonitorService {
         docker: dockerStats,
         uptimeSeconds: time.uptime,
         timestamp: new Date().toISOString(),
+
+        nginx: integrationData.nginx || null,
       };
 
       return payload;
