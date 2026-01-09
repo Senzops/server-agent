@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { BaseIntegration, IntegrationConfig } from './base';
 import { logger } from '../utils/logger';
-import { TraefikStats } from '../types/telemetry';
+import { TraefikComponentStats, TraefikStats } from '../types/telemetry';
 
 export class TraefikIntegration extends BaseIntegration {
   constructor(config: IntegrationConfig) {
