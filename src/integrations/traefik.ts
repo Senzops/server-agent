@@ -72,7 +72,7 @@ export class TraefikIntegration extends BaseIntegration {
     const httpsAgent = new https.Agent({ rejectUnauthorized: false });
 
     const response = await axios.get(endpoint, {
-      timeout: 2000,
+      timeout: 5000,
       ...authConfig,
       httpsAgent
     });
