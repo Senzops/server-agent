@@ -24,6 +24,7 @@ export const config = {
     },
     terminal: {
       enabled: process.env.ENABLE_TERMINAL === 'true',
+      allowHostAccess: process.env.ALLOW_HOST_ACCESS === 'true',
     }
   }
 };

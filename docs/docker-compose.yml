@@ -47,6 +47,7 @@ services:
       
       #6. Terminal (Opt-in)
       - ENABLE_TERMINAL=false
+      - ALLOW_HOST_ACCESS=false
 
     # Resource Limits (Safety Guardrails)
     # Ensures the agent never consumes too much of your server's resources

@@ -1,165 +1,152 @@
 import { io, Socket } from 'socket.io-client';
 import * as pty from 'node-pty';
 import os from 'os';
-import path from 'path';
-import { logger } from '../utils/logger';
+import fs from 'fs';
 import { config } from '../config/env';
+import { logger } from '../utils/logger';
 
-type ResizePayload = {
-  cols: number;
-  rows: number;
-};
-
-const DEFAULT_COLS = 80;
-const DEFAULT_ROWS = 24;
-
-const ALLOWED_SHELLS = new Set([
-  '/bin/bash',
-  '/bin/sh',
-  'powershell.exe',
-  'cmd.exe'
-]);
+/* ───────────────────────────────
+   ASCII Banner
+─────────────────────────────── */
+const WELCOME_BANNER = `
+\r\n\x1b[38;5;75m   _____                               \x1b[0m
+\r\n\x1b[38;5;75m  / ____|                              \x1b[0m
+\r\n\x1b[38;5;75m | (___   ___ _ __  ____ ___  _ __     \x1b[0m
+\r\n\x1b[38;5;75m  \\___ \\ / _ \\ '_ \\|_  // _ \\| '__|    \x1b[0m
+\r\n\x1b[38;5;75m  ____) |  __/ | | |/ /| (_) | |       \x1b[0m
+\r\n\x1b[38;5;75m |_____/ \\___|_| |_/___|\\___/|_|       \x1b[0m
+\r\n
+\r\n\x1b[32m✔ Secure Session Established\x1b[0m
+\r\n\x1b[90mConnected to ${os.hostname()} (${os.type()} ${os.release()})\x1b[0m
+\r\n
+`;
 
 export class TerminalService {
   private socket: Socket | null = null;
   private ptyProcess: pty.IPty | null = null;
-  private readonly enabled: boolean;
-  private initialized = false;
-  private ptySessionId = 0;
+  private enabled = config.integrations.terminal.enabled;
   private spawning = false;
+  private sessionId = 0;
 
-  constructor() {
-    this.enabled = config.integrations.terminal.enabled;
-  }
+  /* ───────────────────────────────
+     Init
+  ─────────────────────────────── */
 
   public init(): void {
-    if (!this.enabled) {
-      logger.info('[Terminal] Service disabled via config.');
-      return;
-    }
+    if (!this.enabled) return;
 
-    if (this.initialized) {
-      logger.warn('[Terminal] init() called more than once. Ignoring.');
-      return;
-    }
-
-    this.initialized = true;
     logger.info('[Terminal] Initializing Terminal Service');
 
-    const socketBaseUrl = this.resolveSocketUrl();
+    const socketUrl = this.resolveSocketUrl();
 
-    this.socket = io(socketBaseUrl, {
+    this.socket = io(socketUrl, {
       path: '/api/socket',
+      transports: ['websocket'],
       auth: {
         type: 'agent',
         vpsId: config.agent.vpsId,
         apiKey: config.api.key
       },
-      transports: ['websocket'],
       reconnection: true,
-      reconnectionDelay: 5000,
-      reconnectionAttempts: Infinity,
-      timeout: 20000
+      reconnectionDelay: 5000
     });
 
     this.registerSocketHandlers();
   }
 
-  // ─────────────────────────────────────────────
-  // Socket Handlers
-  // ─────────────────────────────────────────────
+  /* ───────────────────────────────
+     Socket Handlers
+  ─────────────────────────────── */
 
   private registerSocketHandlers(): void {
     if (!this.socket) return;
 
     this.socket.on('connect', () => {
-      logger.info('[Terminal] Connected to relay server');
+      logger.info('[Terminal] Connected to relay');
     });
 
-    this.socket.on('connect_error', (err) => {
-      if (err?.message !== 'xhr poll error') {
-        logger.error('[Terminal] Connection error', err);
-      }
+    this.socket.on('disconnect', () => {
+      logger.warn('[Terminal] Disconnected — killing PTY');
+      this.killPty();
     });
 
-    this.socket.on('disconnect', (reason) => {
-      logger.warn(`[Terminal] Disconnected: ${reason}`);
-      this.killPty(); // SECURITY: kill shell immediately
-    });
-
-    this.socket.on('term:spawn', (payload: Partial<ResizePayload>) => {
-      const cols = this.sanitizeNumber(payload?.cols, DEFAULT_COLS, 10, 500);
-      const rows = this.sanitizeNumber(payload?.rows, DEFAULT_ROWS, 5, 300);
-      this.spawnPty(cols, rows);
+    this.socket.on('term:spawn', ({ cols, rows }) => {
+      this.spawnPty(cols || 80, rows || 24);
     });
 
     this.socket.on('term:input', (data: unknown) => {
       if (typeof data !== 'string' || !this.ptyProcess) return;
-      try {
-        this.ptyProcess.write(data);
-      } catch {
-        this.killPty();
-      }
+      try { this.ptyProcess.write(data); } catch { }
     });
 
-    this.socket.on('term:resize', (payload: Partial<ResizePayload>) => {
+    this.socket.on('term:resize', ({ cols, rows }) => {
       if (!this.ptyProcess) return;
-      const cols = this.sanitizeNumber(payload?.cols, DEFAULT_COLS, 10, 500);
-      const rows = this.sanitizeNumber(payload?.rows, DEFAULT_ROWS, 5, 300);
-
-      try {
-        this.ptyProcess.resize(cols, rows);
-      } catch {
-        this.killPty();
-      }
+      try { this.ptyProcess.resize(cols, rows); } catch { }
     });
   }
 
-  // ─────────────────────────────────────────────
-  // PTY Lifecycle
-  // ─────────────────────────────────────────────
+  /* ───────────────────────────────
+     PTY Lifecycle
+  ─────────────────────────────── */
 
   private spawnPty(cols: number, rows: number): void {
     if (this.spawning) {
-      logger.warn('[Terminal] Spawn already in progress, ignoring');
+      logger.warn('[Terminal] Spawn already in progress — ignored');
       return;
     }
 
     this.spawning = true;
     this.killPty();
 
-    const sessionId = ++this.ptySessionId;
-    const shell = this.resolveShell();
+    const currentSession = ++this.sessionId;
+
+    let shell = this.resolveShell();
+    let args: string[] = [];
+
+    // 🔒 HOST ACCESS (Explicitly gated)
+    if (config.integrations.terminal.allowHostAccess === true) {
+      const nsenter = '/usr/bin/nsenter';
+      if (fs.existsSync(nsenter)) {
+        logger.warn('[Terminal] HOST ACCESS ENABLED via nsenter');
+        shell = nsenter;
+        args = ['-t', '1', '-m', '-u', '-i', '-n', '/bin/bash'];
+      }
+    }
 
     try {
-      const ptyProcess = pty.spawn(shell, [], {
+      const ptyProc = pty.spawn(shell, args, {
         name: 'xterm-256color',
         cols,
         rows,
-        cwd: this.resolveCwd(),
+        cwd: process.env.HOME || '/root',
         env: this.buildSafeEnv()
       });
 
-      this.ptyProcess = ptyProcess;
+      this.ptyProcess = ptyProc;
 
       logger.info('[Terminal] PTY spawned', {
-        pid: ptyProcess.pid,
-        sessionId
+        pid: ptyProc.pid,
+        session: currentSession,
+        shell
       });
 
-      ptyProcess.onData((data) => {
-        if (this.ptyProcess === ptyProcess) {
+      this.socket?.emit('term:output', WELCOME_BANNER);
+
+      ptyProc.onData((data) => {
+        if (this.ptyProcess === ptyProc) {
           this.socket?.emit('term:output', data);
         }
       });
 
-      ptyProcess.onExit(({ exitCode, signal }) => {
-        if (this.ptyProcess !== ptyProcess) {
-          // Old PTY — ignore
-          return;
-        }
+      ptyProc.onExit(({ exitCode, signal }) => {
+        if (this.ptyProcess !== ptyProc) return;
 
-        logger.info('[Terminal] PTY exited', { exitCode, signal, sessionId });
+        logger.info('[Terminal] PTY exited', {
+          exitCode,
+          signal,
+          session: currentSession
+        });
+
         this.socket?.emit(
           'term:output',
           '\r\n\x1b[33m[Session Closed]\x1b[0m\r\n'
@@ -175,86 +162,41 @@ export class TerminalService {
     }
   }
 
-
   private killPty(): void {
     if (!this.ptyProcess) return;
 
-    const pid = this.ptyProcess.pid;
-    logger.info('[Terminal] Killing PTY session', { pid });
-
     try {
+      logger.info('[Terminal] Killing PTY', { pid: this.ptyProcess.pid });
       this.ptyProcess.kill();
-    } catch {
-      // ignore
-    } finally {
+    } catch { }
+    finally {
       this.ptyProcess = null;
     }
   }
 
-
-  // ─────────────────────────────────────────────
-  // Helpers
-  // ─────────────────────────────────────────────
+  /* ───────────────────────────────
+     Helpers
+  ─────────────────────────────── */
 
   private resolveSocketUrl(): string {
     try {
-      const url = new URL(config.api.endpoint);
-      return url.origin;
+      return new URL(config.api.endpoint).origin;
     } catch {
-      logger.warn('[Terminal] Invalid API endpoint, defaulting to localhost');
       return 'http://localhost:5000';
     }
   }
 
   private resolveShell(): string {
-    const platform = os.platform();
-    let shell =
-      platform === 'win32'
-        ? process.env.COMSPEC || 'powershell.exe'
-        : process.env.SHELL || '/bin/sh';
-
-    if (!ALLOWED_SHELLS.has(shell)) {
-      logger.warn('[Terminal] Shell not allowed, falling back', shell);
-      shell = platform === 'win32' ? 'powershell.exe' : '/bin/sh';
-    }
-
-    return shell;
-  }
-
-  private resolveCwd(): string {
-    return (
-      process.env.HOME ||
-      process.env.USERPROFILE ||
-      path.resolve('/')
-    );
+    if (fs.existsSync('/usr/bin/zsh')) return '/usr/bin/zsh';
+    if (fs.existsSync('/bin/bash')) return '/bin/bash';
+    return '/bin/sh';
   }
 
   private buildSafeEnv(): NodeJS.ProcessEnv {
-    const ALLOWED_ENV = [
-      'PATH',
-      'HOME',
-      'USER',
-      'LANG',
-      'TERM',
-      'SHELL'
-    ];
-
-    return ALLOWED_ENV.reduce<NodeJS.ProcessEnv>((env, key) => {
-      if (process.env[key]) {
-        env[key] = process.env[key];
-      }
+    const allowed = ['PATH', 'HOME', 'USER', 'LANG', 'TERM'];
+    return allowed.reduce((env, k) => {
+      if (process.env[k]) env[k] = process.env[k];
       return env;
-    }, {});
-  }
-
-  private sanitizeNumber(
-    value: unknown,
-    fallback: number,
-    min: number,
-    max: number
-  ): number {
-    const num = Number(value);
-    if (!Number.isFinite(num)) return fallback;
-    return Math.min(Math.max(num, min), max);
+    }, {} as NodeJS.ProcessEnv);
   }
 }
