@@ -5,6 +5,7 @@
 ## **🚀 Features**
 
 - **Real-time Metrics:** Captures CPU, Memory, Disk, and Network I/O.
+- **Web Terminal**: Secure, browser-based SSH access to your server (supports Host Shell via `nsenter`).
 - **Zero-Config Networking:** Uses outbound HTTP/S requests. No firewall ports need to be opened.
 - **Lightweight:** Optimized Node.js runtime with strict resource limits.
 - **Secure:** Runs in a read-only Docker container; data is authenticated via API Keys.
@@ -101,7 +102,7 @@ docker-compose logs -f
 2. Custom Docker Options :
 
 ```
---name senzor --restart unless-stopped --network host --pid host --memory="150m" --cpus="0.1" -v /:/host/root:ro -v /sys:/host/sys:ro -v /proc:/host/proc:ro -v /var/run/docker.sock:/var/run/docker.sock:ro
+--name senzor --restart unless-stopped --network host --pid host --privileged --memory="150m" --cpus="0.1" -v /:/host/root:ro -v /sys:/host/sys:ro -v /proc:/host/proc:ro -v /var/run/docker.sock:/var/run/docker.sock:ro
 ```
 
 3. Add the following environment variables in **Environment Variables**:
@@ -120,13 +121,26 @@ ALLOW_HOST_ACCESS="false"
 
 The agent is configured entirely via Environment Variables.
 
-| Variable     | Description                          | Default             | Required |
-| :----------- | :----------------------------------- | :------------------ | :------- |
-| SERVER_ID    | Unique ID from your Senzor Dashboard | null                | **Yes**  |
-| API_KEY      | Secret Key for authentication        | null                | **Yes**  |
-| API_ENDPOINT | The ingest URL of the backend        | http://localhost... | **Yes**  |
-| INTERVAL     | Time between checks (in seconds)     | 60                  | No       |
-| NODE_ENV     | Environment mode                     | production          | No       |
+### **Core Configuration**
+
+| Variable     | Description                        | Default                   | Required |
+| :----------- | :--------------------------------- | :------------------------ | :------- |
+| SERVER_ID    | Unique ID from Senzor Dashboard    | null                      | **Yes**  |
+| API_KEY      | Secret Key for authentication      | null                      | **Yes**  |
+| API_ENDPOINT | Ingest URL (Use default for Cloud) | https://api.senzor.dev... | No       |
+| INTERVAL     | Telemetry interval (seconds)       | 60                        | No       |
+
+### **Integrations**
+
+| Variable         | Description                         | Default                       | Required   |
+| :--------------- | :---------------------------------- | :---------------------------- | :--------- |
+| ENABLE_TERMINAL  | Enable Web SSH Terminal             | false                         | No         |
+| ENABLE_NGINX     | Enable Nginx Stub Status monitoring | false                         | No         |
+| NGINX_STATUS_URL | URL for Nginx stub_status           | http://127.0.0.1/nginx_status | If enabled |
+| ENABLE_TRAEFIK   | Enable Traefik API monitoring       | false                         | No         |
+| TRAEFIK_API_URL  | URL for Traefik API                 | http://127.0.0.1:8080         | If enabled |
+| TRAEFIK_USER     | Basic Auth Username                 | null                          | No         |
+| TRAEFIK_PASSWORD | Basic Auth Password                 | null                          | No         |
 
 ## **💻 Development Setup**
 
@@ -169,9 +183,14 @@ To contribute to the agent or build it locally:
 
 ## **🔒 Security Architecture**
 
-- **Read-Only Access:** The container mounts the host filesystem as Read-Only (:ro). It cannot modify your system files.
-- **Privilege Isolation:** The agent does not require sudo privileges to run, only docker group access.
-- **Outbound Only:** The agent initiates all connections. No listening ports are exposed to the internet.
+Senzor is designed with a **Zero-Trust** security model:
+
+1. **Outbound Only:** The agent initiates all connections via HTTPS (Port 443). You do **not** need to open inbound ports.
+2. **Read-Only Filesystem:** The host filesystem is mounted as Read-Only (:ro). The agent cannot modify system files.
+3. **Privilege Isolation:**
+   - For basic metrics, the agent runs as a standard container.
+   - For **Host Terminal** access (nsenter), the container requires \--privileged mode. If this is not provided, the terminal will safely fallback to a restricted container shell.
+4. **Ephemeral Sessions:** Terminal sessions use secure WebSockets and are killed immediately upon disconnection.
 
 ## **🆘 Troubleshooting**
 
@@ -184,3 +203,9 @@ docker logs -f senzor
 
 "Connection Refused":  
 Ensure your `API_ENDPOINT` is reachable from the server. If testing locally with Docker, use `http://host.docker.internal:3000` instead of `localhost`.
+
+"Permission denied" in Terminal:  
+If the Web Terminal shows "Host access denied", ensure you ran the container with the \--privileged flag. Without it, the agent cannot break out of the container namespace to access the host shell.
+
+"Connection Refused" (Traefik/Nginx):  
+If running inside Docker, localhost refers to the container itself. Use http://172.17.0.1:8080 (Docker Gateway) or http://host.docker.internal:8080 to reach services running on the host or other containers.
