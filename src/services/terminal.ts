@@ -25,6 +25,8 @@ export class TerminalService {
   private ptyProcess: pty.IPty | null = null;
   private readonly enabled: boolean;
   private initialized = false;
+  private ptySessionId = 0;
+  private spawning = false;
 
   constructor() {
     this.enabled = config.integrations.terminal.enabled;
@@ -118,52 +120,69 @@ export class TerminalService {
   // ─────────────────────────────────────────────
 
   private spawnPty(cols: number, rows: number): void {
+    if (this.spawning) {
+      logger.warn('[Terminal] Spawn already in progress, ignoring');
+      return;
+    }
+
+    this.spawning = true;
     this.killPty();
 
+    const sessionId = ++this.ptySessionId;
     const shell = this.resolveShell();
-    const cwd = this.resolveCwd();
-    const env = this.buildSafeEnv();
 
     try {
-      this.ptyProcess = pty.spawn(shell, [], {
+      const ptyProcess = pty.spawn(shell, [], {
         name: 'xterm-256color',
         cols,
         rows,
-        cwd,
-        env
+        cwd: this.resolveCwd(),
+        env: this.buildSafeEnv()
       });
+
+      this.ptyProcess = ptyProcess;
 
       logger.info('[Terminal] PTY spawned', {
-        pid: this.ptyProcess.pid,
-        shell
+        pid: ptyProcess.pid,
+        sessionId
       });
 
-      this.ptyProcess.onData((data) => {
-        this.socket?.emit('term:output', data);
+      ptyProcess.onData((data) => {
+        if (this.ptyProcess === ptyProcess) {
+          this.socket?.emit('term:output', data);
+        }
       });
 
-      this.ptyProcess.onExit(({ exitCode, signal }) => {
-        logger.info('[Terminal] PTY exited', { exitCode, signal });
+      ptyProcess.onExit(({ exitCode, signal }) => {
+        if (this.ptyProcess !== ptyProcess) {
+          // Old PTY — ignore
+          return;
+        }
+
+        logger.info('[Terminal] PTY exited', { exitCode, signal, sessionId });
         this.socket?.emit(
           'term:output',
           '\r\n\x1b[33m[Session Closed]\x1b[0m\r\n'
         );
-        this.killPty();
+
+        this.ptyProcess = null;
       });
-    } catch (err: any) {
+
+    } catch (err) {
       logger.error('[Terminal] Failed to spawn PTY', err);
-      this.socket?.emit(
-        'term:output',
-        `\r\n\x1b[31mError spawning shell: ${err.message}\x1b[0m\r\n`
-      );
+    } finally {
+      this.spawning = false;
     }
   }
+
 
   private killPty(): void {
     if (!this.ptyProcess) return;
 
+    const pid = this.ptyProcess.pid;
+    logger.info('[Terminal] Killing PTY session', { pid });
+
     try {
-      logger.info('[Terminal] Killing PTY session');
       this.ptyProcess.kill();
     } catch {
       // ignore
@@ -171,6 +190,7 @@ export class TerminalService {
       this.ptyProcess = null;
     }
   }
+
 
   // ─────────────────────────────────────────────
   // Helpers
