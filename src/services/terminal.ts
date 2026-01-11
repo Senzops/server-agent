@@ -125,8 +125,7 @@ export class TerminalService {
 
     const shell = this.resolveShell(isHost);
     const cwd = this.resolveCwd(isHost);
-    const ps1 = this.resolvePs1(shell, isHost);
-    const env = this.buildSafeEnv(ps1);
+    const env = this.buildSafeEnv();
     const args = isHost ? ['-t', '1', '-m', '-u', '-i', '-n', shell, '-i'] : ['-i'];
 
     try {
@@ -217,7 +216,7 @@ export class TerminalService {
     return '/root';
   }
 
-  private buildSafeEnv(ps1?: string): NodeJS.ProcessEnv {
+  private buildSafeEnv(): NodeJS.ProcessEnv {
     const ps1Colorized = '\\x1b[1;32m\\u@\\h\\x1b[0m:\\x1b[1;34m\\w\\x1b[0m\\$ \\x1b[36m';
 
     return {
