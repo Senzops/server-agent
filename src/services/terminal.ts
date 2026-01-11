@@ -125,7 +125,8 @@ export class TerminalService {
 
     const shell = this.resolveShell(isHost);
     const cwd = this.resolveCwd(isHost);
-    const env = this.buildSafeEnv();
+    const ps1 = this.resolvePs1(shell, isHost);
+    const env = this.buildSafeEnv(ps1);
     const args = isHost ? ['-t', '1', '-m', '-u', '-i', '-n', shell, '-i'] : ['-i'];
 
     try {
@@ -216,11 +217,12 @@ export class TerminalService {
     return '/root';
   }
 
-  private buildSafeEnv(): NodeJS.ProcessEnv {
+  private buildSafeEnv(ps1?: string): NodeJS.ProcessEnv {
     return {
       ...process.env,
       TERM: 'xterm-256color',
-      COLORTERM: 'truecolor'
+      COLORTERM: 'truecolor',
+      ...(ps1 ? { PS1: ps1 } : {})
     };
   }
 
@@ -231,5 +233,17 @@ export class TerminalService {
     } catch {
       return 'http://localhost:5000';
     }
+  }
+
+  private resolvePs1(shell: string, isHostShell: boolean): string | undefined {
+    const isBash = shell.includes('bash') || isHostShell;
+
+    if (isBash) {
+      // Bash (supports \[ \])
+      return '\\[\\x1b[1;32m\\]\\u@\\h\\[\\x1b[0m\\]:\\[\\x1b[1;34m\\]\\w\\[\\x1b[0m\\]\\$ ';
+    }
+
+    // sh / ash fallback (no \[ \])
+    return '\\x1b[1;32m\\u@\\h\\x1b[0m:\\x1b[1;34m\\w\\x1b[0m\\$ ';
   }
 }
