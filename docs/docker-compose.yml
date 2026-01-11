@@ -44,6 +44,9 @@ services:
       # Optional: Only if Traefik dashboard is protected
       # - TRAEFIK_USER=admin
       # - TRAEFIK_PASSWORD=secure_password
+      
+      #6. Terminal (Opt-in)
+      - ENABLE_TERMINAL=false
 
     # Resource Limits (Safety Guardrails)
     # Ensures the agent never consumes too much of your server's resources
