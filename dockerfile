@@ -1,16 +1,14 @@
 # --- Stage 1: Build ---
 FROM node:18-alpine AS builder
 
-# Install build tools needed for native addons (if any)
+# Install build tools for node-pty (Native C++ Module)
 RUN apk add --no-cache python3 make g++
 
 WORKDIR /app
 
-# Install dependencies
 COPY package.json package-lock.json ./
 RUN npm ci
 
-# Copy source and build TypeScript
 COPY tsconfig.json ./
 COPY src ./src
 RUN npm run build
@@ -18,23 +16,18 @@ RUN npm run build
 # --- Stage 2: Production Runner ---
 FROM node:18-alpine
 
-# Install Linux utilities required by 'systeminformation' library
-# (lscpu, free, etc. are needed for accurate readings)
-RUN apk add --no-cache util-linux
+# Production needs these tools/libs for the native binary runtime
+RUN apk add --no-cache util-linux python3 make g++
 
 WORKDIR /app
 
-# Copy built artifacts from builder stage
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/package.json ./
 COPY --from=builder /app/package-lock.json ./
+# We copy node_modules from builder because node-pty is compiled there
+COPY --from=builder /app/node_modules ./node_modules
 
-# Install ONLY production dependencies (keeps image small)
-RUN npm ci --omit=dev
-
-# Set Environment defaults
 ENV NODE_ENV=production
 ENV INTERVAL=60
 
-# CMD to start the agent
 CMD ["node", "dist/index.js"]

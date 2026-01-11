@@ -96,6 +96,10 @@ export interface TelemetryPayload {
   uptimeSeconds: number;
   timestamp: string;
 
+  // Integrations Data
   nginx?: NginxStats | null;
   traefik?: TraefikStats | null;
+
+  // Feature Flags
+  terminalEnabled: boolean;
 }

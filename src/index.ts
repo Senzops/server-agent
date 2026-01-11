@@ -3,6 +3,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { config, validateConfig } from './config/env';
 import { MonitorService } from './services/monitor';
 import { logger } from './utils/logger';
+import { TerminalService } from './services/terminal';
 
 // Initialize
 const monitorService = new MonitorService();
@@ -11,6 +12,14 @@ const runAgent = async () => {
   try {
     validateConfig();
     logger.info(`Starting Senzor Agent for SERVER: ${config.agent.vpsId}`);
+
+    if (config.integrations.terminal.enabled) {
+      logger.info('[System] Terminal Integration Enabled');
+      const terminalService = new TerminalService();
+      terminalService.init();
+    } else {
+      logger.info('[System] Terminal Integration Disabled (Default)');
+    }
 
     // Main Loop
     while (true) {

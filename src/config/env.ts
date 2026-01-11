@@ -21,6 +21,9 @@ export const config = {
       url: process.env.TRAEFIK_API_URL || "http://127.0.0.1:8080",
       username: process.env.TRAEFIK_USER,
       password: process.env.TRAEFIK_PASSWORD
+    },
+    terminal: {
+      enabled: process.env.ENABLE_TERMINAL === 'true',
     }
   }
 };

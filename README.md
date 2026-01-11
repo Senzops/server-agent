@@ -60,6 +60,7 @@ docker run -d \
   -e TRAEFIK_API_URL="$TRAEFIK_API_URL" \
   -e TRAEFIK_USER="$TRAEFIK_USER" \
   -e TRAEFIK_PASSWORD="$TRAEFIK_PASSWORD" \
+  -e ENABLE_TERMINAL="$ENABLE_TERMINAL" \
   ghcr.io/senzops/server-agent:latest
 ```
 
@@ -76,6 +77,7 @@ API_KEY="<YOUR_API_KEY>"
 API_ENDPOINT="https://api.senzor.dev/api/ingest/stats"
 ENABLE_NGINX="true"
 ENABLE_TRAEFIK="false"
+ENABLE_TERMINAL="true"
 ```
 
 3. **Start the Agent**:
@@ -107,6 +109,7 @@ API_KEY="<YOUR_API_KEY>"
 API_ENDPOINT="https://api.senzor.dev/api/ingest/stats"
 ENABLE_NGINX="true"
 ENABLE_TRAEFIK="false"
+ENABLE_TERMINAL="true"
 ```
 
 ## **⚙️ Configuration**

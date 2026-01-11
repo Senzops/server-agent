@@ -80,6 +80,14 @@ else
     TRAEFIK_PASSWORD=""
 fi
 
+# Web Terminal
+read -p "Enable Web Terminal? (y/N): " ENABLE_TERMINAL
+if [[ "$ENABLE_TERMINAL" =~ ^[Yy]$ ]]; then
+    ENABLE_TERMINAL="true"
+else
+    ENABLE_TERMINAL="false"
+fi
+
 echo -e "\n${BLUE}Configuring Agent...${NC}"
 
 # 3. Stop existing container if running
@@ -122,6 +130,7 @@ docker run -d \
   -e TRAEFIK_API_URL="$TRAEFIK_API_URL" \
   -e TRAEFIK_USER="$TRAEFIK_USER" \
   -e TRAEFIK_PASSWORD="$TRAEFIK_PASSWORD" \
+  -e ENABLE_TERMINAL="$ENABLE_TERMINAL" \
   $IMAGE_NAME
 
 if [ $? -eq 0 ]; then

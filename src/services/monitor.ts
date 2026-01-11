@@ -2,6 +2,7 @@ import si from 'systeminformation';
 import { ContainerStats, TelemetryPayload } from '../types/telemetry';
 import { logger } from '../utils/logger';
 import { IntegrationManager } from '../integrations/manager';
+import { config } from '../config/env';
 
 export class MonitorService {
 
@@ -119,6 +120,8 @@ export class MonitorService {
 
         nginx: integrationData.nginx || null,
         traefik: integrationData.traefik || null,
+
+        terminalEnabled: config.integrations.terminal.enabled,
       };
 
       return payload;
