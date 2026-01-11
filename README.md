@@ -45,6 +45,7 @@ docker run -d \
   --restart unless-stopped \
   --network host \
   --pid host \
+  --privileged \
   --memory="150m" \
   --cpus="0.1" \
   -v /:/host/root:ro \

@@ -2,11 +2,12 @@ import { io, Socket } from 'socket.io-client';
 import * as pty from 'node-pty';
 import os from 'os';
 import fs from 'fs';
+import { execSync } from 'child_process';
 import { config } from '../config/env';
 import { logger } from '../utils/logger';
 
 /* ───────────────────────────────
-   ASCII Banner
+   Banner
 ─────────────────────────────── */
 const WELCOME_BANNER = `
 \r\n\x1b[38;5;75m   _____                               \x1b[0m
@@ -33,11 +34,13 @@ export class TerminalService {
   ─────────────────────────────── */
 
   public init(): void {
-    if (!this.enabled) return;
-
-    logger.info('[Terminal] Initializing Terminal Service');
+    if (!this.enabled) {
+      logger.info('[Terminal] Service disabled');
+      return;
+    }
 
     const socketUrl = this.resolveSocketUrl();
+    logger.info('[Terminal] Initializing', { socketUrl });
 
     this.socket = io(socketUrl, {
       path: '/api/socket',
@@ -86,51 +89,71 @@ export class TerminalService {
   }
 
   /* ───────────────────────────────
+     Capability Check
+  ─────────────────────────────── */
+
+  private canUseNsenter(): boolean {
+    if (!config.integrations.terminal.allowHostAccess) return false;
+    if (!fs.existsSync('/usr/bin/nsenter')) return false;
+
+    try {
+      execSync('/usr/bin/nsenter -t 1 -m -u -i -n true', {
+        stdio: 'ignore',
+        timeout: 250
+      });
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /* ───────────────────────────────
      PTY Lifecycle
   ─────────────────────────────── */
 
   private spawnPty(cols: number, rows: number): void {
-    if (this.spawning) {
-      logger.warn('[Terminal] Spawn already in progress — ignored');
+    if (this.spawning || !this.socket?.connected) {
+      logger.warn('[Terminal] Spawn blocked (busy or disconnected)');
       return;
     }
 
     this.spawning = true;
     this.killPty();
 
-    const currentSession = ++this.sessionId;
+    const session = ++this.sessionId;
+    const isHost = this.canUseNsenter();
 
-    let shell = this.resolveShell();
-    let args: string[] = [];
-
-    // 🔒 HOST ACCESS (Explicitly gated)
-    if (config.integrations.terminal.allowHostAccess === true) {
-      const nsenter = '/usr/bin/nsenter';
-      if (fs.existsSync(nsenter)) {
-        logger.warn('[Terminal] HOST ACCESS ENABLED via nsenter');
-        shell = nsenter;
-        args = ['-t', '1', '-m', '-u', '-i', '-n', '/bin/bash'];
-      }
-    }
+    const shell = this.resolveShell(isHost);
+    const cwd = this.resolveCwd(isHost);
+    const env = this.buildSafeEnv(isHost);
+    const args = isHost ? ['-t', '1', '-m', '-u', '-i', '-n', shell] : [];
 
     try {
-      const ptyProc = pty.spawn(shell, args, {
+      const ptyProc = pty.spawn(isHost ? '/usr/bin/nsenter' : shell, args, {
         name: 'xterm-256color',
         cols,
         rows,
-        cwd: process.env.HOME || '/root',
-        env: this.buildSafeEnv()
+        cwd,
+        env
       });
 
       this.ptyProcess = ptyProc;
 
       logger.info('[Terminal] PTY spawned', {
         pid: ptyProc.pid,
-        session: currentSession,
-        shell
+        session,
+        mode: isHost ? 'host' : 'container',
+        shell,
+        cwd
       });
 
-      this.socket?.emit('term:output', WELCOME_BANNER);
+      this.socket.emit('term:output', WELCOME_BANNER);
+      this.socket.emit(
+        'term:output',
+        isHost
+          ? `\x1b[90mConnected to HOST (${os.hostname()})\x1b[0m\r\n\r\n`
+          : '\x1b[33m⚠ Container shell (host access unavailable)\x1b[0m\r\n\r\n'
+      );
 
       ptyProc.onData((data) => {
         if (this.ptyProcess === ptyProc) {
@@ -141,12 +164,7 @@ export class TerminalService {
       ptyProc.onExit(({ exitCode, signal }) => {
         if (this.ptyProcess !== ptyProc) return;
 
-        logger.info('[Terminal] PTY exited', {
-          exitCode,
-          signal,
-          session: currentSession
-        });
-
+        logger.info('[Terminal] PTY exited', { exitCode, signal, session });
         this.socket?.emit(
           'term:output',
           '\r\n\x1b[33m[Session Closed]\x1b[0m\r\n'
@@ -178,25 +196,46 @@ export class TerminalService {
      Helpers
   ─────────────────────────────── */
 
+  private resolveShell(isHost: boolean): string {
+    if (isHost) {
+      if (fs.existsSync('/bin/bash')) return '/bin/bash';
+      return '/bin/sh';
+    }
+
+    if (fs.existsSync('/usr/bin/zsh')) return '/usr/bin/zsh';
+    if (fs.existsSync('/bin/bash')) return '/bin/bash';
+    return '/bin/sh';
+  }
+
+  private resolveCwd(isHost: boolean): string {
+    if (isHost) return '/';
+
+    const home = process.env.HOME;
+    if (home && fs.existsSync(home)) return home;
+
+    return '/root';
+  }
+
+  private buildSafeEnv(isHost: boolean): NodeJS.ProcessEnv {
+    const allowed = ['PATH', 'HOME', 'USER', 'LANG', 'TERM'];
+    const env: NodeJS.ProcessEnv = {};
+
+    for (const key of allowed) {
+      if (process.env[key]) env[key] = process.env[key];
+    }
+
+    env.TERM = 'xterm-256color';
+    env.COLORTERM = 'truecolor';
+    env.PS1 = isHost ? '\\u@HOST:\\w\\$ ' : '\\u@CONTAINER:\\w\\$ ';
+
+    return env;
+  }
+
   private resolveSocketUrl(): string {
     try {
       return new URL(config.api.endpoint).origin;
     } catch {
       return 'http://localhost:5000';
     }
-  }
-
-  private resolveShell(): string {
-    if (fs.existsSync('/usr/bin/zsh')) return '/usr/bin/zsh';
-    if (fs.existsSync('/bin/bash')) return '/bin/bash';
-    return '/bin/sh';
-  }
-
-  private buildSafeEnv(): NodeJS.ProcessEnv {
-    const allowed = ['PATH', 'HOME', 'USER', 'LANG', 'TERM'];
-    return allowed.reduce((env, k) => {
-      if (process.env[k]) env[k] = process.env[k];
-      return env;
-    }, {} as NodeJS.ProcessEnv);
   }
 }

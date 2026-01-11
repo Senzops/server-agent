@@ -10,6 +10,7 @@ services:
     # CRITICAL: Network and PID must be 'host' to monitor the actual server
     network_mode: "host"
     pid: "host"
+    privileged: true
 
     # Mount host directories strictly Read-Only (:ro) for security
     volumes:
@@ -54,7 +55,7 @@ services:
     deploy:
       resources:
         limits:
-          memory: 150M
-          cpus: "0.10" # Max 10% of 1 CPU Core
+          memory: 200M
+          cpus: "0.15" # Max 15% of 1 CPU Core
         reservations:
-          memory: 30M
+          memory: 50M
