@@ -226,7 +226,6 @@ export class TerminalService {
 
     env.TERM = 'xterm-256color';
     env.COLORTERM = 'truecolor';
-    env.PS1 = isHost ? '\\u@HOST:\\w\\$ ' : '\\u@CONTAINER:\\w\\$ ';
 
     return env;
   }
