@@ -77,6 +77,11 @@ export class TerminalService {
       this.spawnPty(cols || 80, rows || 24);
     });
 
+    this.socket.on('term:destroy', () => {
+      logger.info('[Terminal] Received destroy signal (User disconnected)');
+      this.killPty();
+    });
+
     this.socket.on('term:input', (data: unknown) => {
       if (typeof data !== 'string' || !this.ptyProcess) return;
       try { this.ptyProcess.write(data); } catch { }
