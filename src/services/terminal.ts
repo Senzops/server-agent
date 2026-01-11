@@ -125,8 +125,8 @@ export class TerminalService {
 
     const shell = this.resolveShell(isHost);
     const cwd = this.resolveCwd(isHost);
-    const env = this.buildSafeEnv(isHost);
-    const args = isHost ? ['-t', '1', '-m', '-u', '-i', '-n', shell] : [];
+    const env = this.buildSafeEnv();
+    const args = isHost ? ['-t', '1', '-m', '-u', '-i', '-n', shell, '-i'] : ['-i'];
 
     try {
       const ptyProc = pty.spawn(isHost ? '/usr/bin/nsenter' : shell, args, {
@@ -216,19 +216,14 @@ export class TerminalService {
     return '/root';
   }
 
-  private buildSafeEnv(isHost: boolean): NodeJS.ProcessEnv {
-    const allowed = ['PATH', 'HOME', 'USER', 'LANG', 'TERM'];
-    const env: NodeJS.ProcessEnv = {};
-
-    for (const key of allowed) {
-      if (process.env[key]) env[key] = process.env[key];
-    }
-
-    env.TERM = 'xterm-256color';
-    env.COLORTERM = 'truecolor';
-
-    return env;
+  private buildSafeEnv(): NodeJS.ProcessEnv {
+    return {
+      ...process.env,
+      TERM: 'xterm-256color',
+      COLORTERM: 'truecolor'
+    };
   }
+
 
   private resolveSocketUrl(): string {
     try {
