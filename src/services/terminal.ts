@@ -218,11 +218,13 @@ export class TerminalService {
   }
 
   private buildSafeEnv(ps1?: string): NodeJS.ProcessEnv {
+    const ps1Colorized = '\\x1b[1;32m\\u@\\h\\x1b[0m:\\x1b[1;34m\\w\\x1b[0m\\$ \\x1b[36m';
+
     return {
       ...process.env,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
-      ...(ps1 ? { PS1: ps1 } : {})
+      PS1: ps1Colorized,
     };
   }
 
@@ -233,17 +235,5 @@ export class TerminalService {
     } catch {
       return 'http://localhost:5000';
     }
-  }
-
-  private resolvePs1(shell: string, isHostShell: boolean): string | undefined {
-    const isBash = shell.includes('bash') || isHostShell;
-
-    if (isBash) {
-      // Bash (supports \[ \])
-      return '\\[\\x1b[1;32m\\]\\u@\\h\\[\\x1b[0m\\]:\\[\\x1b[1;34m\\]\\w\\[\\x1b[0m\\]\\$ ';
-    }
-
-    // sh / ash fallback (no \[ \])
-    return '\\x1b[1;32m\\u@\\h\\x1b[0m:\\x1b[1;34m\\w\\x1b[0m\\$ ';
   }
 }
