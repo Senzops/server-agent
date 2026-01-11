@@ -1,139 +1,240 @@
 import { io, Socket } from 'socket.io-client';
 import * as pty from 'node-pty';
 import os from 'os';
+import path from 'path';
 import { logger } from '../utils/logger';
 import { config } from '../config/env';
+
+type ResizePayload = {
+  cols: number;
+  rows: number;
+};
+
+const DEFAULT_COLS = 80;
+const DEFAULT_ROWS = 24;
+
+const ALLOWED_SHELLS = new Set([
+  '/bin/bash',
+  '/bin/sh',
+  'powershell.exe',
+  'cmd.exe'
+]);
 
 export class TerminalService {
   private socket: Socket | null = null;
   private ptyProcess: pty.IPty | null = null;
-  private enabled: boolean;
+  private readonly enabled: boolean;
+  private initialized = false;
 
   constructor() {
     this.enabled = config.integrations.terminal.enabled;
   }
 
-  public init() {
+  public init(): void {
     if (!this.enabled) {
       logger.info('[Terminal] Service disabled via config.');
       return;
     }
 
-    logger.info('[Terminal] Starting Terminal Service...');
-
-    // 1. Determine Socket URL
-    // We strip the path from the API Endpoint to get the base URL
-    // e.g. "https://api.senzor.dev/api/ingest/stats" -> "https://api.senzor.dev"
-    let socketBaseUrl = 'http://localhost:5000';
-    try {
-      const urlObj = new URL(config.api.endpoint);
-      socketBaseUrl = urlObj.origin;
-    } catch (e) {
-      logger.warn('[Terminal] Invalid API Endpoint format, defaulting to localhost');
+    if (this.initialized) {
+      logger.warn('[Terminal] init() called more than once. Ignoring.');
+      return;
     }
 
-    // 2. Connect
+    this.initialized = true;
+    logger.info('[Terminal] Initializing Terminal Service');
+
+    const socketBaseUrl = this.resolveSocketUrl();
+
     this.socket = io(socketBaseUrl, {
-      path: '/api/socket', // Must match Backend configuration
+      path: '/api/socket',
       auth: {
         type: 'agent',
         vpsId: config.agent.vpsId,
         apiKey: config.api.key
       },
+      transports: ['websocket'],
       reconnection: true,
       reconnectionDelay: 5000,
-      reconnectionAttempts: Infinity
+      reconnectionAttempts: Infinity,
+      timeout: 20000
     });
 
-    // --- Socket Event Listeners ---
+    this.registerSocketHandlers();
+  }
+
+  // ─────────────────────────────────────────────
+  // Socket Handlers
+  // ─────────────────────────────────────────────
+
+  private registerSocketHandlers(): void {
+    if (!this.socket) return;
 
     this.socket.on('connect', () => {
-      logger.info('[Terminal] Connected to Relay Server');
+      logger.info('[Terminal] Connected to relay server');
     });
 
     this.socket.on('connect_error', (err) => {
-      // Quiet log for connection refused to avoid spamming if server is down
-      if (err.message !== 'xhr poll error') {
-        logger.error(`[Terminal] Connection Error: ${err.message}`);
+      if (err?.message !== 'xhr poll error') {
+        logger.error('[Terminal] Connection error', err);
       }
     });
 
     this.socket.on('disconnect', (reason) => {
-      logger.warn(`[Terminal] Disconnected from Relay: ${reason}`);
-      this.killPty(); // Security: Kill shell if connection drops
+      logger.warn(`[Terminal] Disconnected: ${reason}`);
+      this.killPty(); // SECURITY: kill shell immediately
     });
 
-    // 3. Spawn Shell Request (from Frontend)
-    this.socket.on('term:spawn', ({ cols, rows }) => {
-      this.spawnPty(cols || 80, rows || 24);
+    this.socket.on('term:spawn', (payload: Partial<ResizePayload>) => {
+      const cols = this.sanitizeNumber(payload?.cols, DEFAULT_COLS, 10, 500);
+      const rows = this.sanitizeNumber(payload?.rows, DEFAULT_ROWS, 5, 300);
+      this.spawnPty(cols, rows);
     });
 
-    // 4. Handle Input (Keystrokes from Frontend)
-    this.socket.on('term:input', (data) => {
-      if (this.ptyProcess) {
-        try {
-          this.ptyProcess.write(data);
-        } catch (e) {
-          // PTY might be dead
-        }
+    this.socket.on('term:input', (data: unknown) => {
+      if (typeof data !== 'string' || !this.ptyProcess) return;
+      try {
+        this.ptyProcess.write(data);
+      } catch {
+        this.killPty();
       }
     });
 
-    // 5. Handle Resize
-    this.socket.on('term:resize', ({ cols, rows }) => {
-      if (this.ptyProcess) {
-        try {
-          this.ptyProcess.resize(cols, rows);
-        } catch (e) { }
+    this.socket.on('term:resize', (payload: Partial<ResizePayload>) => {
+      if (!this.ptyProcess) return;
+      const cols = this.sanitizeNumber(payload?.cols, DEFAULT_COLS, 10, 500);
+      const rows = this.sanitizeNumber(payload?.rows, DEFAULT_ROWS, 5, 300);
+
+      try {
+        this.ptyProcess.resize(cols, rows);
+      } catch {
+        this.killPty();
       }
     });
   }
 
-  private spawnPty(cols: number, rows: number) {
-    // Kill existing shell to prevent zombie processes
+  // ─────────────────────────────────────────────
+  // PTY Lifecycle
+  // ─────────────────────────────────────────────
+
+  private spawnPty(cols: number, rows: number): void {
     this.killPty();
 
-    // Determine shell based on OS
-    const shell = os.platform() === 'win32' ? 'powershell.exe' : 'bash';
+    const shell = this.resolveShell();
+    const cwd = this.resolveCwd();
+    const env = this.buildSafeEnv();
 
     try {
-      // Spawn pseudo-terminal
       this.ptyProcess = pty.spawn(shell, [], {
-        name: 'xterm-color',
-        cols: cols,
-        rows: rows,
-        cwd: process.env.HOME || '/root',
-        env: process.env as any // Pass current env vars (API keys, etc)
+        name: 'xterm-256color',
+        cols,
+        rows,
+        cwd,
+        env
       });
 
-      logger.info(`[Terminal] Spawned shell: ${shell} (PID: ${this.ptyProcess.pid})`);
+      logger.info('[Terminal] PTY spawned', {
+        pid: this.ptyProcess.pid,
+        shell
+      });
 
-      // Pipe PTY output -> Socket
       this.ptyProcess.onData((data) => {
         this.socket?.emit('term:output', data);
       });
 
       this.ptyProcess.onExit(({ exitCode, signal }) => {
-        logger.info(`[Terminal] Shell exited (Code: ${exitCode}, Signal: ${signal})`);
-        this.socket?.emit('term:output', '\r\n\x1b[33m[Session Closed]\x1b[0m\r\n');
-        this.ptyProcess = null;
+        logger.info('[Terminal] PTY exited', { exitCode, signal });
+        this.socket?.emit(
+          'term:output',
+          '\r\n\x1b[33m[Session Closed]\x1b[0m\r\n'
+        );
+        this.killPty();
       });
-
-    } catch (e: any) {
-      logger.error('[Terminal] Failed to spawn PTY', e);
-      this.socket?.emit('term:output', `\r\nError spawning shell: ${e.message}\r\n`);
+    } catch (err: any) {
+      logger.error('[Terminal] Failed to spawn PTY', err);
+      this.socket?.emit(
+        'term:output',
+        `\r\n\x1b[31mError spawning shell: ${err.message}\x1b[0m\r\n`
+      );
     }
   }
 
-  private killPty() {
-    if (this.ptyProcess) {
-      try {
-        logger.info('[Terminal] Killing active PTY session');
-        this.ptyProcess.kill();
-      } catch (e) {
-        // Ignore errors if process already dead
-      }
+  private killPty(): void {
+    if (!this.ptyProcess) return;
+
+    try {
+      logger.info('[Terminal] Killing PTY session');
+      this.ptyProcess.kill();
+    } catch {
+      // ignore
+    } finally {
       this.ptyProcess = null;
     }
+  }
+
+  // ─────────────────────────────────────────────
+  // Helpers
+  // ─────────────────────────────────────────────
+
+  private resolveSocketUrl(): string {
+    try {
+      const url = new URL(config.api.endpoint);
+      return url.origin;
+    } catch {
+      logger.warn('[Terminal] Invalid API endpoint, defaulting to localhost');
+      return 'http://localhost:5000';
+    }
+  }
+
+  private resolveShell(): string {
+    const platform = os.platform();
+    let shell =
+      platform === 'win32'
+        ? process.env.COMSPEC || 'powershell.exe'
+        : process.env.SHELL || '/bin/sh';
+
+    if (!ALLOWED_SHELLS.has(shell)) {
+      logger.warn('[Terminal] Shell not allowed, falling back', shell);
+      shell = platform === 'win32' ? 'powershell.exe' : '/bin/sh';
+    }
+
+    return shell;
+  }
+
+  private resolveCwd(): string {
+    return (
+      process.env.HOME ||
+      process.env.USERPROFILE ||
+      path.resolve('/')
+    );
+  }
+
+  private buildSafeEnv(): NodeJS.ProcessEnv {
+    const ALLOWED_ENV = [
+      'PATH',
+      'HOME',
+      'USER',
+      'LANG',
+      'TERM',
+      'SHELL'
+    ];
+
+    return ALLOWED_ENV.reduce<NodeJS.ProcessEnv>((env, key) => {
+      if (process.env[key]) {
+        env[key] = process.env[key];
+      }
+      return env;
+    }, {});
+  }
+
+  private sanitizeNumber(
+    value: unknown,
+    fallback: number,
+    min: number,
+    max: number
+  ): number {
+    const num = Number(value);
+    if (!Number.isFinite(num)) return fallback;
+    return Math.min(Math.max(num, min), max);
   }
 }
