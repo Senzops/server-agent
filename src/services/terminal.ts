@@ -10,17 +10,17 @@ import { logger } from '../utils/logger';
    Banner
 ─────────────────────────────── */
 const WELCOME_BANNER = `
-\r\n\x1b[38;5;75m   _____                               \x1b[0m
-\r\n\x1b[38;5;75m  / ____|                              \x1b[0m
-\r\n\x1b[38;5;75m | (___   ___ _ __  ____ ___  _ __     \x1b[0m
-\r\n\x1b[38;5;75m  \\___ \\ / _ \\ '_ \\|_  // _ \\| '__|    \x1b[0m
-\r\n\x1b[38;5;75m  ____) |  __/ | | |/ /| (_) | |       \x1b[0m
-\r\n\x1b[38;5;75m |_____/ \\___|_| |_/___|\\___/|_|       \x1b[0m
-\r\n
-\r\n\x1b[32m✔ Secure Session Established\x1b[0m
-\r\n\x1b[90mConnected to ${os.hostname()} (${os.type()} ${os.release()})\x1b[0m
-\r\n
+\x1b[38;5;75m   _____                               \x1b[0m
+\x1b[38;5;75m  / ____|                              \x1b[0m
+\x1b[38;5;75m | (___   ___ _ __  ____ ___  _ __     \x1b[0m
+\x1b[38;5;75m  \\___ \\ / _ \\ '_ \\|_  // _ \\| '__|    \x1b[0m
+\x1b[38;5;75m  ____) |  __/ | | |/ /| (_) | |       \x1b[0m
+\x1b[38;5;75m |_____/ \\___|_| |_/___|\\___/|_|       \x1b[0m
+
+\x1b[32m✔ Secure Session Established\x1b[0m
+\x1b[90mConnected to ${os.hostname()} (${os.type()} ${os.release()})\x1b[0m
 `;
+
 
 export class TerminalService {
   private socket: Socket | null = null;
@@ -217,7 +217,9 @@ export class TerminalService {
   }
 
   private buildSafeEnv(): NodeJS.ProcessEnv {
-    const ps1Colorized = '\\x1b[1;32m\\u@\\h\\x1b[0m:\\x1b[1;34m\\w\\x1b[0m\\$ \\x1b[36m';
+    const user = process.env.USER || 'root';
+    const host = os.hostname();
+    const ps1Colorized = `\x1b[1;32m${user}@${host}\x1b[0m:\x1b[1;34m$PWD\x1b[0m\$ \x1b[36m`;
 
     return {
       ...process.env,
