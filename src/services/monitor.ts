@@ -94,7 +94,8 @@ export class MonitorService {
           used: mem.used,
           free: mem.free,
           active: mem.active,
-          usagePercent: (mem.used / mem.total) * 100,
+          usagePercent:
+            ((mem.total - mem.available) / mem.total) * 100,
         },
         disk: {
           total: mainDisk.size,
