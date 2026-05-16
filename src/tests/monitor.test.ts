@@ -15,14 +15,14 @@ const runTest = async () => {
     }
 
     console.log('\n--- Response ---');
-    console.log({ stats })
+    console.log(JSON.stringify(stats))
 
     // Assertions
     const checks = [
       { name: 'OS Platform Detected', valid: !!stats.os.platform && stats.os.platform.length > 0 },
       { name: 'CPU Cores Detected', valid: stats.cpu.cores > 0 },
       { name: 'Memory Total > 0', valid: stats.memory.total > 0 },
-      { name: 'Disk Stats Present', valid: typeof stats.disk.total === 'number' },
+      { name: 'Disk Stats Present', valid: typeof stats.disk?.[0].total === 'number' },
       { name: 'Network Stats Present', valid: typeof stats.network.bytesRecvSec === 'number' },
       { name: 'Timestamp is Valid', valid: !isNaN(Date.parse(stats.timestamp)) },
     ];

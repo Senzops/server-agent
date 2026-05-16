@@ -5,39 +5,36 @@ import { IntegrationManager } from '../integrations/manager';
 import { config } from '../config/env';
 
 export class MonitorService {
-
   private integrationManager: IntegrationManager;
 
   constructor() {
     this.integrationManager = new IntegrationManager();
   }
 
-  /**
-   * Collects comprehensive system metrics including Docker stats
-   */
   public async collectStats(): Promise<TelemetryPayload | null> {
     try {
-      // Parallelize data fetching (excluding docker for safety first)
-      const [osInfo, cpu, currentLoad, mem, fsSize, networkStats, time,
-        processes, latency, integrationData] = await Promise.all([
-          si.osInfo(),
-          si.cpu(),
-          si.currentLoad(),
-          si.mem(),
-          si.fsSize(),
-          si.networkStats(),
-          si.time(),
-          si.processes(),
-          si.inetLatency(),
-          this.integrationManager.collectAll()
-        ]);
+      // Parallelize fetching to avoid latency bottlenecks
+      const [
+        osInfo, cpu, currentLoad, mem, fsSize, networkStats, time,
+        processes, latency, integrationData, temp, graphics
+      ] = await Promise.all([
+        si.osInfo(),
+        si.cpu(),
+        si.currentLoad(),
+        si.mem(),
+        si.fsSize(),
+        si.networkStats(),
+        si.time(),
+        si.processes(),
+        si.inetLatency(),
+        this.integrationManager.collectAll(),
+        si.cpuTemperature(),
+        si.graphics()
+      ]);
 
-      // Fetch Docker Data (Metadata + Stats)
       let dockerStats: ContainerStats[] = [];
       try {
-        // Fetch Metadata (Name, Image, State)
         const containers = await si.dockerContainers();
-        // Fetch Performance Stats (CPU, Mem, I/O)
         const stats = await si.dockerContainerStats('*');
 
         dockerStats = containers.map((container) => {
@@ -51,27 +48,39 @@ export class MonitorService {
             memoryUsage: stat?.memUsage || 0,
             memoryLimit: stat?.memLimit || 0,
             memoryPercent: stat?.memPercent || 0,
-            netIO: {
-              rx: stat?.netIO.rx || 0,
-              wx: stat?.netIO.wx || 0,
-            },
-            blockIO: {
-              read: stat?.blockIO.r || 0,
-              write: stat?.blockIO.w || 0,
-            }
+            netIO: { rx: stat?.netIO.rx || 0, wx: stat?.netIO.wx || 0 },
+            blockIO: { read: stat?.blockIO.r || 0, write: stat?.blockIO.w || 0 }
           }
         });
       } catch (dockerError) {
-        // This is not critical; user might not have Docker or permissions
-        // logger.warn('Docker stats could not be collected (socket likely missing)');
+        // Soft fail if Docker socket is missing
       }
 
-      // Process System Data
+      // --- Multi-Disk Mapping ---
+      // Filter out pseudo-filesystems so we only monitor physical drives & mounts
+      const excludedFs = ['tmpfs', 'devtmpfs', 'overlay', 'squashfs', 'efivarfs', 'shm', 'sysfs', 'proc'];
+      const activeDisks = fsSize
+        .filter(d => !excludedFs.includes(d.fs) && !excludedFs.includes(d.type))
+        .map(d => ({
+          total: d.size,
+          used: d.used,
+          usagePercent: d.use,
+          name: d.mount || d.fs
+        }));
 
-      // Get primary disk (usually mounted on /)
-      const mainDisk = fsSize.length > 0 ? fsSize[0] : { size: 0, used: 0, use: 0, fs: 'N/A' };
+      // --- GPU Mapping ---
+      const activeGpus = (graphics?.controllers || [])
+        .filter(g => g.model && g.model.toLowerCase() !== 'unknown')
+        .map((gpu, index) => ({
+          id: `gpu-${index}`,
+          model: gpu.model || `GPU ${index}`,
+          utilization: gpu.utilizationGpu || 0,
+          temperature: gpu.temperatureGpu || 0,
+          powerDraw: gpu.powerDraw || 0,
+          vramUsed: gpu.memoryUsed || 0,
+          vramTotal: gpu.memoryTotal || 0,
+        }));
 
-      // Aggregate network traffic across all interfaces
       const netRx = networkStats.reduce((acc, iface) => acc + iface.rx_sec, 0);
       const netTx = networkStats.reduce((acc, iface) => acc + iface.tx_sec, 0);
 
@@ -94,15 +103,14 @@ export class MonitorService {
           used: mem.used,
           free: mem.free,
           active: mem.active,
-          usagePercent:
-            ((mem.total - mem.available) / mem.total) * 100,
+          usagePercent: ((mem.total - mem.available) / mem.total) * 100,
         },
-        disk: {
-          total: mainDisk.size,
-          used: mainDisk.used,
-          usagePercent: mainDisk.use,
-          name: mainDisk.fs,
+        disk: activeDisks,
+        hardware: {
+          temperature: temp?.main || 0,
+          powerDraw: 0, // Fallback to 0 if chassis power isn't supported natively
         },
+        gpus: activeGpus,
         network: {
           bytesRecvSec: netRx,
           bytesSentSec: netTx,

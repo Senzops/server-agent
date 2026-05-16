@@ -25,7 +25,7 @@ export interface DiskStats {
   total: number;
   used: number;
   usagePercent: number;
-  name: string;
+  name: string; // The mount point (e.g., '/', '/mnt/data')
 }
 
 export interface NetworkStats {
@@ -39,19 +39,13 @@ export interface ContainerStats {
   id: string;
   name: string;
   image: string;
-  state: string; // 'running', 'exited', etc.
+  state: string;
   cpuPercent: number;
   memoryUsage: number;
   memoryLimit: number;
   memoryPercent: number;
-  netIO: {
-    rx: number; // bytes received
-    wx: number; // bytes sent
-  };
-  blockIO: {
-    read: number; // bytes read from disk
-    write: number; // bytes written to disk
-  };
+  netIO: { rx: number; wx: number; };
+  blockIO: { read: number; write: number; };
 }
 
 export interface ProcessStats {
@@ -69,7 +63,7 @@ export interface NginxStats {
   reading: number;
   writing: number;
   waiting: number;
-  reqPerSec: number; // Calculated
+  reqPerSec: number;
 }
 
 export interface TraefikComponentStats {
@@ -79,20 +73,38 @@ export interface TraefikComponentStats {
 }
 
 export interface TraefikStats {
-  uptimeSeconds?: number; // Calculated if possible, or null
+  uptimeSeconds?: number;
   routers: TraefikComponentStats;
   services: TraefikComponentStats;
   middlewares: TraefikComponentStats;
+}
+
+// --- HARDWARE METRICS ---
+export interface HardwareStats {
+  temperature: number; // Celsius
+  powerDraw: number;   // Watts (if accessible by IPMI/Sensors)
+}
+
+export interface GpuStats {
+  id: string;
+  model: string;
+  utilization: number;
+  temperature: number;
+  powerDraw: number;
+  vramUsed: number;
+  vramTotal: number;
 }
 
 export interface TelemetryPayload {
   os: OsStats;
   cpu: CpuStats;
   memory: MemoryStats;
-  disk: DiskStats;
+  disk: DiskStats[]; // Upgraded to Array for multi-disk
+  hardware: HardwareStats;
+  gpus: GpuStats[];
   network: NetworkStats;
   processes: ProcessStats;
-  docker: ContainerStats[]; // Array of containers
+  docker: ContainerStats[];
   uptimeSeconds: number;
   timestamp: string;
 
