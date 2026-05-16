@@ -52,6 +52,8 @@ docker run -d \
   -v /:/host/root:ro \
   -v /sys:/host/sys:ro \
   -v /proc:/host/proc:ro \
+  -v /etc/os-release:/etc/os-release:ro \
+  -v /etc/hostname:/etc/hostname:ro \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -e SERVER_ID="<YOUR_SERVER_ID>" \
   -e API_KEY="<YOUR_API_KEY>" \
@@ -102,7 +104,7 @@ docker-compose logs -f
 2. Custom Docker Options :
 
 ```
---name senzor --restart unless-stopped --network host --pid host --privileged --memory="150m" --cpus="0.1" -v /:/host/root:ro -v /sys:/host/sys:ro -v /proc:/host/proc:ro -v /var/run/docker.sock:/var/run/docker.sock:ro
+--name senzor --restart unless-stopped --network host --pid host --privileged --memory="150m" --cpus="0.1" -v /:/host/root:ro -v /sys:/host/sys:ro -v /proc:/host/proc:ro -v /var/run/docker.sock:/var/run/docker.sock:ro -v /etc/os-release:/etc/os-release:ro -v /etc/hostname:/etc/hostname:ro
 ```
 
 3. Add the following environment variables in **Environment Variables**:

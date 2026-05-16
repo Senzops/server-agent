@@ -17,6 +17,8 @@ services:
       - /:/host/root:ro
       - /sys:/host/sys:ro
       - /proc:/host/proc:ro
+      - /etc/os-release:/etc/os-release:ro
+      - /etc/hostname:/etc/hostname:ro
       - /var/run/docker.sock:/var/run/docker.sock:ro
 
     # Configuration

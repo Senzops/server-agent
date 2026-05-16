@@ -119,6 +119,8 @@ docker run -d \
   -v /:/host/root:ro \
   -v /sys:/host/sys:ro \
   -v /proc:/host/proc:ro \
+  -v /etc/os-release:/etc/os-release:ro \
+  -v /etc/hostname:/etc/hostname:ro \
   -v /var/run/docker.sock:/var/run/docker.sock:ro \
   -e SERVER_ID="$SERVER_ID" \
   -e API_KEY="$API_KEY" \
