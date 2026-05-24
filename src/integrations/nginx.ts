@@ -3,7 +3,7 @@ import { BaseIntegration, IntegrationConfig } from './base';
 import { logger } from '../utils/logger';
 import { NginxStats } from '../types/telemetry';
 
-export class NginxIntegration extends BaseIntegration {
+export class NginxIntegration extends BaseIntegration<NginxStats> {
   private previousRequests: number = 0;
   private previousTime: number = Date.now();
 

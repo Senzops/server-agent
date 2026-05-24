@@ -13,11 +13,7 @@ export class MonitorService {
 
   public async collectStats(): Promise<TelemetryPayload | null> {
     try {
-      // Parallelize fetching to avoid latency bottlenecks
-      const [
-        osInfo, cpu, currentLoad, mem, fsSize, networkStats, time,
-        processes, latency, integrationData, temp, graphics
-      ] = await Promise.all([
+      const results = await Promise.allSettled([
         si.osInfo(),
         si.cpu(),
         si.currentLoad(),
@@ -31,6 +27,26 @@ export class MonitorService {
         si.cpuTemperature(),
         si.graphics()
       ]);
+
+      const get = <T>(index: number, fallback: T): T => {
+        const r = results[index];
+        if (r.status === 'fulfilled') return r.value as T;
+        logger.warn(`Metric collection failed at index ${index}`, { error: (r as PromiseRejectedResult).reason?.message });
+        return fallback;
+      };
+
+      const osInfo = get(0, { platform: 'unknown', distro: 'unknown', release: '', hostname: '', arch: '' } as any);
+      const cpu = get(1, { cores: 0, speed: 0, brand: 'unknown' } as any);
+      const currentLoad = get(2, { currentLoad: 0 } as any);
+      const mem = get(3, { total: 0, used: 0, free: 0, active: 0, available: 0 } as any);
+      const fsSize = get(4, [] as any[]);
+      const networkStats = get(5, [] as any[]);
+      const time = get(6, { uptime: 0 } as any);
+      const processes = get(7, { all: 0, running: 0, blocked: 0, sleeping: 0 } as any);
+      const latency = get(8, 0 as any);
+      const integrationData = get(9, {} as any);
+      const temp = get(10, { main: 0 } as any);
+      const graphics = get(11, { controllers: [] } as any);
 
       let dockerStats: ContainerStats[] = [];
       try {
@@ -52,16 +68,15 @@ export class MonitorService {
             blockIO: { read: stat?.blockIO.r || 0, write: stat?.blockIO.w || 0 }
           }
         });
-      } catch (dockerError) {
-        // Soft fail if Docker socket is missing
+      } catch (dockerError: any) {
+        logger.debug('Docker stats unavailable', { error: dockerError.message });
       }
 
       // --- Multi-Disk Mapping ---
-      // Filter out pseudo-filesystems so we only monitor physical drives & mounts
       const excludedFs = ['tmpfs', 'devtmpfs', 'overlay', 'squashfs', 'efivarfs', 'shm', 'sysfs', 'proc'];
       const activeDisks = fsSize
-        .filter(d => !excludedFs.includes(d.fs) && !excludedFs.includes(d.type))
-        .map(d => ({
+        .filter((d: any) => !excludedFs.includes(d.fs) && !excludedFs.includes(d.type))
+        .map((d: any) => ({
           total: d.size,
           used: d.used,
           usagePercent: d.use,
@@ -70,8 +85,8 @@ export class MonitorService {
 
       // --- GPU Mapping ---
       const activeGpus = (graphics?.controllers || [])
-        .filter(g => g.model && g.model.toLowerCase() !== 'unknown')
-        .map((gpu, index) => ({
+        .filter((g: any) => g.model && g.model.toLowerCase() !== 'unknown')
+        .map((gpu: any, index: number) => ({
           id: `gpu-${index}`,
           model: gpu.model || `GPU ${index}`,
           utilization: gpu.utilizationGpu || 0,
@@ -81,8 +96,8 @@ export class MonitorService {
           vramTotal: gpu.memoryTotal || 0,
         }));
 
-      const netRx = networkStats.reduce((acc, iface) => acc + iface.rx_sec, 0);
-      const netTx = networkStats.reduce((acc, iface) => acc + iface.tx_sec, 0);
+      const netRx = networkStats.reduce((acc: number, iface: any) => acc + (iface.rx_sec || 0), 0);
+      const netTx = networkStats.reduce((acc: number, iface: any) => acc + (iface.tx_sec || 0), 0);
 
       const payload: TelemetryPayload = {
         os: {
@@ -103,12 +118,12 @@ export class MonitorService {
           used: mem.used,
           free: mem.free,
           active: mem.active,
-          usagePercent: ((mem.total - mem.available) / mem.total) * 100,
+          usagePercent: mem.total > 0 ? ((mem.total - mem.available) / mem.total) * 100 : 0,
         },
         disk: activeDisks,
         hardware: {
           temperature: temp?.main || 0,
-          powerDraw: 0, // Fallback to 0 if chassis power isn't supported natively
+          powerDraw: 0,
         },
         gpus: activeGpus,
         network: {

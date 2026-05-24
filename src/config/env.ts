@@ -1,6 +1,9 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
+const rawInterval = parseInt(process.env.INTERVAL || '60', 10);
+const interval = Number.isNaN(rawInterval) ? 60 : Math.max(5, Math.min(3600, rawInterval));
+
 export const config = {
   api: {
     endpoint: process.env.API_ENDPOINT || 'https://api.senzor.dev/api/ingest/stats',
@@ -9,7 +12,7 @@ export const config = {
   },
   agent: {
     vpsId: process.env.SERVER_ID,
-    interval: parseInt(process.env.INTERVAL || '60', 10),
+    interval,
   },
   integrations: {
     nginx: {
@@ -20,7 +23,8 @@ export const config = {
       enabled: process.env.ENABLE_TRAEFIK === 'true',
       url: process.env.TRAEFIK_API_URL || "http://127.0.0.1:8080",
       username: process.env.TRAEFIK_USER,
-      password: process.env.TRAEFIK_PASSWORD
+      password: process.env.TRAEFIK_PASSWORD,
+      insecureSkipVerify: process.env.TRAEFIK_INSECURE_SKIP_VERIFY === 'true',
     },
     terminal: {
       enabled: process.env.ENABLE_TERMINAL === 'true',

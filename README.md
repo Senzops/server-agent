@@ -2,43 +2,51 @@
 
 **Senzor Server Agent** is a lightweight, secure, and reliable telemetry collector designed for Server infrastructure. Written in TypeScript and distributed via Docker, it ensures minimal footprint while providing production-grade monitoring.
 
-## **🚀 Features**
+## **Features**
 
-- **Real-time Metrics:** Captures CPU, Memory, Disk, and Network I/O.
+- **Real-time Metrics:** Captures CPU, Memory, Disk (multi-mount), Network I/O, GPU, Docker containers, and process stats.
 - **Web Terminal**: Secure, browser-based SSH access to your server (supports Host Shell via `nsenter`).
+- **Integrations:** Built-in Nginx and Traefik monitoring with auto-discovery.
 - **Zero-Config Networking:** Uses outbound HTTP/S requests. No firewall ports need to be opened.
-- **Lightweight:** Optimized Node.js runtime with strict resource limits.
+- **Lightweight:** Optimized Node.js 22 Alpine runtime with strict resource limits (256MB RAM, 0.2 CPU).
 - **Secure:** Runs in a read-only Docker container; data is authenticated via API Keys.
-- **Resilient:** Auto-restarts on failure and queues metrics if the network momentarily drops.
+- **Resilient:** Auto-restarts on failure, retries with exponential backoff, and gracefully shuts down on SIGTERM/SIGINT.
 
-## **🛠 Installation (For Users)**
+## **Installation**
 
 ### **Option 1: One-Line Installer (Recommended)**
 
-This script automatically detects your operating system, installs Docker (if required), and configures the Senzor agent.
-
 ```sh
-# Replace the variables below with your actual Senzor dashboard credentials
 export SERVER_ID="your-server-id"
 export API_KEY="your-api-key"
-export API_ENDPOINT="https://api.senzor.dev/api/ingest/stats"
 
-curl -sL https://raw.githubusercontent.com/senzops/server-agent/main/install_agent.sh | sudo -E bash -
+curl -fsSL https://raw.githubusercontent.com/senzops/server-agent/main/install_agent.sh | sudo -E bash -
 ```
 
 ### **Option 2: Interactive Installation**
 
-Download the script manually, review it if desired, then run it interactively.
+Download the script, review it, then run interactively:
 
 ```sh
-curl -sLO https://raw.githubusercontent.com/senzops/server-agent/main/install_agent.sh
+curl -fsSLO https://raw.githubusercontent.com/senzops/server-agent/main/install_agent.sh
 chmod +x install_agent.sh
-sudo -E ./install_agent.sh
+sudo bash install_agent.sh
 ```
 
-### **Option 3: Manual Docker Run**
+### **Option 3: Non-Interactive (CI / Automation)**
 
-If you prefer to run the container manually:
+All configuration is passed via environment variables:
+
+```sh
+export SERVER_ID="your-server-id"
+export API_KEY="your-api-key"
+export API_ENDPOINT="https://api.senzor.dev/api/ingest/stats"
+export ENABLE_TERMINAL="true"
+
+curl -fsSL https://raw.githubusercontent.com/senzops/server-agent/main/install_agent.sh | sudo -E bash -s -- --non-interactive
+```
+
+### **Option 4: Manual Docker Run**
 
 ```sh
 docker run -d \
@@ -46,9 +54,8 @@ docker run -d \
   --restart unless-stopped \
   --network host \
   --pid host \
-  --privileged \
-  --memory="150m" \
-  --cpus="0.1" \
+  --memory=256m \
+  --cpus=0.20 \
   -v /:/host/root:ro \
   -v /sys:/host/sys:ro \
   -v /proc:/host/proc:ro \
@@ -58,156 +65,159 @@ docker run -d \
   -e SERVER_ID="<YOUR_SERVER_ID>" \
   -e API_KEY="<YOUR_API_KEY>" \
   -e API_ENDPOINT="https://api.senzor.dev/api/ingest/stats" \
-  -e ENABLE_NGINX="$ENABLE_NGINX" \
-  -e NGINX_STATUS_URL="$NGINX_STATUS_URL" \
-  -e ENABLE_TRAEFIK="$ENABLE_TRAEFIK" \
-  -e TRAEFIK_API_URL="$TRAEFIK_API_URL" \
-  -e TRAEFIK_USER="$TRAEFIK_USER" \
-  -e TRAEFIK_PASSWORD="$TRAEFIK_PASSWORD" \
-  -e ENABLE_TERMINAL="$ENABLE_TERMINAL" \
-  -e ALLOW_HOST_ACCESS="$ALLOW_HOST_ACCESS" \
+  -e ENABLE_NGINX="false" \
+  -e ENABLE_TRAEFIK="false" \
+  -e ENABLE_TERMINAL="false" \
   ghcr.io/senzops/server-agent:latest
 ```
 
-### **Option 4: Docker Compose Deployment**
+> **Note:** If enabling the web terminal, add `--privileged` and `-e ALLOW_HOST_ACCESS=true` for host shell access.
 
-**Find the [docker-compose.yml](./docs/docker-compose.yml)**
+### **Option 5: Docker Compose**
 
-1. **Download the file**: Save the above linked file as `docker-compose.yml` on your server.
-2. **Edit Credentials**: Open the file and replace the placeholders with your actual IDs from the dashboard:
-
-```.env
-SERVER_ID="<YOUR_SERVER_ID>"
-API_KEY="<YOUR_API_KEY>"
-API_ENDPOINT="https://api.senzor.dev/api/ingest/stats"
-ENABLE_NGINX="true"
-ENABLE_TRAEFIK="false"
-ENABLE_TERMINAL="true"
-ALLOW_HOST_ACCESS="false"
-```
-
-3. **Start the Agent**:
+See the [docker-compose.yml](./docs/docker-compose.yml) for a ready-to-use template.
 
 ```sh
-docker-compose up -d
+docker compose up -d
+docker compose logs -f
 ```
 
-4. **View Logs**:
-
-```sh
-docker-compose logs -f
-```
-
-### **Option 5: Coolify Deployment Setup**
+### **Option 6: Coolify Deployment**
 
 1. Docker Image: `ghcr.io/senzops/server-agent`
-2. Custom Docker Options :
+2. Custom Docker Options:
 
 ```
---name senzor --restart unless-stopped --network host --pid host --privileged --memory="150m" --cpus="0.1" -v /:/host/root:ro -v /sys:/host/sys:ro -v /proc:/host/proc:ro -v /var/run/docker.sock:/var/run/docker.sock:ro -v /etc/os-release:/etc/os-release:ro -v /etc/hostname:/etc/hostname:ro
+--name senzor --restart unless-stopped --network host --pid host --privileged --memory=256m --cpus=0.20 -v /:/host/root:ro -v /sys:/host/sys:ro -v /proc:/host/proc:ro -v /var/run/docker.sock:/var/run/docker.sock:ro -v /etc/os-release:/etc/os-release:ro -v /etc/hostname:/etc/hostname:ro
 ```
 
-3. Add the following environment variables in **Environment Variables**:
+3. Set environment variables in Coolify's UI (see Configuration table below).
 
-```.env
-SERVER_ID="<YOUR_SERVER_ID>"
-API_KEY="<YOUR_API_KEY>"
-API_ENDPOINT="https://api.senzor.dev/api/ingest/stats"
-ENABLE_NGINX="true"
-ENABLE_TRAEFIK="false"
-ENABLE_TERMINAL="true"
-ALLOW_HOST_ACCESS="false"
+## **Installer Management**
+
+The install script supports management commands:
+
+```sh
+# Check agent status and recent logs
+sudo bash install_agent.sh --status
+
+# Upgrade to latest image
+sudo bash install_agent.sh --upgrade
+
+# Completely remove the agent
+sudo bash install_agent.sh --uninstall
+
+# Pin a specific image tag
+sudo bash install_agent.sh --image-tag v1.2.0
 ```
 
-## **⚙️ Configuration**
+## **Configuration**
 
-The agent is configured entirely via Environment Variables.
+The agent is configured entirely via environment variables.
 
-### **Core Configuration**
+### **Core**
 
-| Variable     | Description                        | Default                   | Required |
-| :----------- | :--------------------------------- | :------------------------ | :------- |
-| SERVER_ID    | Unique ID from Senzor Dashboard    | null                      | **Yes**  |
-| API_KEY      | Secret Key for authentication      | null                      | **Yes**  |
-| API_ENDPOINT | Ingest URL (Use default for Cloud) | https://api.senzor.dev... | No       |
-| INTERVAL     | Telemetry interval (seconds)       | 60                        | No       |
+| Variable       | Description                        | Default                                       | Required |
+| :------------- | :--------------------------------- | :-------------------------------------------- | :------- |
+| `SERVER_ID`    | Unique ID from Senzor Dashboard    | —                                             | **Yes**  |
+| `API_KEY`      | Secret key for authentication      | —                                             | **Yes**  |
+| `API_ENDPOINT` | Ingest URL (use default for Cloud) | `https://api.senzor.dev/api/ingest/stats`     | No       |
+| `INTERVAL`     | Telemetry interval in seconds      | `60` (min: 5, max: 3600)                      | No       |
+| `LOG_LEVEL`    | Logging verbosity                  | `info` (options: error, warn, info, debug)     | No       |
 
 ### **Integrations**
 
-| Variable         | Description                         | Default                       | Required   |
-| :--------------- | :---------------------------------- | :---------------------------- | :--------- |
-| ENABLE_TERMINAL  | Enable Web SSH Terminal             | false                         | No         |
-| ENABLE_NGINX     | Enable Nginx Stub Status monitoring | false                         | No         |
-| NGINX_STATUS_URL | URL for Nginx stub_status           | http://127.0.0.1/nginx_status | If enabled |
-| ENABLE_TRAEFIK   | Enable Traefik API monitoring       | false                         | No         |
-| TRAEFIK_API_URL  | URL for Traefik API                 | http://127.0.0.1:8080         | If enabled |
-| TRAEFIK_USER     | Basic Auth Username                 | null                          | No         |
-| TRAEFIK_PASSWORD | Basic Auth Password                 | null                          | No         |
+| Variable                       | Description                           | Default                         | Required   |
+| :----------------------------- | :------------------------------------ | :------------------------------ | :--------- |
+| `ENABLE_TERMINAL`              | Enable Web SSH Terminal               | `false`                         | No         |
+| `ALLOW_HOST_ACCESS`            | Allow terminal to access host via nsenter | `false`                     | No         |
+| `ENABLE_NGINX`                 | Enable Nginx stub_status monitoring   | `false`                         | No         |
+| `NGINX_STATUS_URL`             | URL for Nginx stub_status             | `http://127.0.0.1/nginx_status` | If enabled |
+| `ENABLE_TRAEFIK`               | Enable Traefik API monitoring         | `false`                         | No         |
+| `TRAEFIK_API_URL`              | URL for Traefik API                   | `http://127.0.0.1:8080`        | If enabled |
+| `TRAEFIK_USER`                 | Traefik Basic Auth username           | —                               | No         |
+| `TRAEFIK_PASSWORD`             | Traefik Basic Auth password           | —                               | No         |
+| `TRAEFIK_INSECURE_SKIP_VERIFY` | Skip TLS certificate verification    | `false`                         | No         |
 
-## **💻 Development Setup**
-
-To contribute to the agent or build it locally:
+## **Development Setup**
 
 1. **Clone & Install**
 
-```sh
- git clone https://github.com/senzops/server-agent.git
- cd agent
- npm install
-```
-
-2. Configure Environment  
-   Create a `.env` file in the root:
-
-   ```.env
-   API_ENDPOINT=https://api.senzor.dev/api/ingest/stats
-   SERVER_ID=test-server-id
-   API_KEY=test-api-key
-   INTERVAL=5
+   ```sh
+   git clone https://github.com/senzops/server-agent.git
+   cd server-agent
+   npm install
    ```
 
-3. **Run Locally (Dev Mode)**
+2. **Configure Environment**
 
+   ```sh
+   cp .env.example .env
+   # Edit .env with your credentials
    ```
+
+3. **Run Locally**
+
+   ```sh
    npm run dev
    ```
 
 4. **Test**
 
-   ```
+   ```sh
    npm test
    ```
 
-5. **Build Docker Image**
+5. **Build**
+
+   ```sh
+   npm run build
+   ```
+
+6. **Build Docker Image**
+
    ```sh
    docker build -t senzor-agent .
    ```
 
-## **🔒 Security Architecture**
+## **Security Architecture**
 
 Senzor is designed with a **Zero-Trust** security model:
 
-1. **Outbound Only:** The agent initiates all connections via HTTPS (Port 443). You do **not** need to open inbound ports.
-2. **Read-Only Filesystem:** The host filesystem is mounted as Read-Only (:ro). The agent cannot modify system files.
+1. **Outbound Only:** The agent initiates all connections via HTTPS (Port 443). No inbound ports need to be opened.
+2. **Read-Only Filesystem:** The host filesystem is mounted as read-only (`:ro`). The agent cannot modify system files.
 3. **Privilege Isolation:**
    - For basic metrics, the agent runs as a standard container.
-   - For **Host Terminal** access (nsenter), the container requires \--privileged mode. If this is not provided, the terminal will safely fallback to a restricted container shell.
-4. **Ephemeral Sessions:** Terminal sessions use secure WebSockets and are killed immediately upon disconnection.
+   - For **Host Terminal** access (nsenter), the container requires `--privileged` mode. Without it, the terminal safely falls back to a restricted container shell.
+4. **Credential Isolation:** API keys are excluded from terminal shell environments.
+5. **Ephemeral Sessions:** Terminal sessions use secure WebSockets and are killed immediately upon disconnection.
+6. **Input Validation:** Terminal input is size-limited to prevent resource exhaustion.
+7. **Graceful Shutdown:** SIGTERM/SIGINT are handled cleanly — in-flight requests complete, PTY sessions are terminated, and sockets are disconnected.
 
-## **🆘 Troubleshooting**
+## **Troubleshooting**
 
-Logs:  
-View the agent logs to see connection status:
+**View Logs:**
 
 ```sh
 docker logs -f senzor
+
+# Or with the installer
+sudo bash install_agent.sh --status
 ```
 
-"Connection Refused":  
+**Enable Debug Logging:**
+
+```sh
+# Set LOG_LEVEL=debug in your environment or docker-compose
+docker stop senzor && docker rm senzor
+# Re-run with -e LOG_LEVEL=debug
+```
+
+**"Connection Refused":**
 Ensure your `API_ENDPOINT` is reachable from the server. If testing locally with Docker, use `http://host.docker.internal:3000` instead of `localhost`.
 
-"Permission denied" in Terminal:  
-If the Web Terminal shows "Host access denied", ensure you ran the container with the \--privileged flag. Without it, the agent cannot break out of the container namespace to access the host shell.
+**"Permission denied" in Terminal:**
+Ensure the container is running with `--privileged` and `ALLOW_HOST_ACCESS=true`. Without these, the agent cannot access the host shell via nsenter.
 
-"Connection Refused" (Traefik/Nginx):  
-If running inside Docker, localhost refers to the container itself. Use http://172.17.0.1:8080 (Docker Gateway) or http://host.docker.internal:8080 to reach services running on the host or other containers.
+**"Connection Refused" (Traefik/Nginx):**
+Inside Docker, `localhost` refers to the container itself. Use `http://172.17.0.1:8080` (Docker bridge gateway) or `http://host.docker.internal:8080` to reach host services. Traefik auto-discovery will try common endpoints automatically.

@@ -6,9 +6,6 @@ import { execSync } from 'child_process';
 import { config } from '../config/env';
 import { logger } from '../utils/logger';
 
-/* ───────────────────────────────
-   Banner
-─────────────────────────────── */
 const WELCOME_BANNER = `
 \r\x1b[38;5;75m   _____                               \x1b[0m
 \r\x1b[38;5;75m  / ____|                              \x1b[0m
@@ -21,6 +18,7 @@ const WELCOME_BANNER = `
 \r\x1b[90mConnected to ${os.hostname()} (${os.type()} ${os.release()})\x1b[0m
 \r`;
 
+const MAX_INPUT_BYTES = 4096;
 
 export class TerminalService {
   private socket: Socket | null = null;
@@ -28,10 +26,6 @@ export class TerminalService {
   private enabled = config.integrations.terminal.enabled;
   private spawning = false;
   private sessionId = 0;
-
-  /* ───────────────────────────────
-     Init
-  ─────────────────────────────── */
 
   public init(): void {
     if (!this.enabled) {
@@ -51,15 +45,23 @@ export class TerminalService {
         apiKey: config.api.key
       },
       reconnection: true,
-      reconnectionDelay: 5000
+      reconnectionDelay: 5000,
+      reconnectionDelayMax: 30000,
+      randomizationFactor: 0.3,
     });
 
     this.registerSocketHandlers();
   }
 
-  /* ───────────────────────────────
-     Socket Handlers
-  ─────────────────────────────── */
+  public destroy(): void {
+    logger.info('[Terminal] Shutting down');
+    this.killPty();
+    if (this.socket) {
+      this.socket.removeAllListeners();
+      this.socket.disconnect();
+      this.socket = null;
+    }
+  }
 
   private registerSocketHandlers(): void {
     if (!this.socket) return;
@@ -68,8 +70,8 @@ export class TerminalService {
       logger.info('[Terminal] Connected to relay');
     });
 
-    this.socket.on('disconnect', () => {
-      logger.warn('[Terminal] Disconnected — killing PTY');
+    this.socket.on('disconnect', (reason) => {
+      logger.warn('[Terminal] Disconnected — killing PTY', { reason });
       this.killPty();
     });
 
@@ -84,18 +86,22 @@ export class TerminalService {
 
     this.socket.on('term:input', (data: unknown) => {
       if (typeof data !== 'string' || !this.ptyProcess) return;
-      try { this.ptyProcess.write(data); } catch { }
+      if (Buffer.byteLength(data, 'utf8') > MAX_INPUT_BYTES) {
+        logger.warn('[Terminal] Oversized input rejected', { bytes: Buffer.byteLength(data, 'utf8') });
+        return;
+      }
+      try { this.ptyProcess.write(data); } catch (err: any) {
+        logger.warn('[Terminal] Write to PTY failed', { error: err.message });
+      }
     });
 
     this.socket.on('term:resize', ({ cols, rows }) => {
       if (!this.ptyProcess) return;
-      try { this.ptyProcess.resize(cols, rows); } catch { }
+      try { this.ptyProcess.resize(cols, rows); } catch (err: any) {
+        logger.warn('[Terminal] Resize failed', { error: err.message });
+      }
     });
   }
-
-  /* ───────────────────────────────
-     Capability Check
-  ─────────────────────────────── */
 
   private canUseNsenter(): boolean {
     if (!config.integrations.terminal.allowHostAccess) return false;
@@ -112,10 +118,6 @@ export class TerminalService {
     }
   }
 
-  /* ───────────────────────────────
-     PTY Lifecycle
-  ─────────────────────────────── */
-
   private spawnPty(cols: number, rows: number): void {
     if (this.spawning || !this.socket?.connected) {
       logger.warn('[Terminal] Spawn blocked (busy or disconnected)');
@@ -123,17 +125,18 @@ export class TerminalService {
     }
 
     this.spawning = true;
-    this.killPty();
-
-    const session = ++this.sessionId;
-    const isHost = this.canUseNsenter();
-
-    const shell = this.resolveShell(isHost);
-    const cwd = this.resolveCwd(isHost);
-    const env = this.buildSafeEnv();
-    const args = isHost ? ['-t', '1', '-m', '-u', '-i', '-n', shell, '-i'] : ['-i'];
 
     try {
+      this.killPty();
+
+      const session = ++this.sessionId;
+      const isHost = this.canUseNsenter();
+
+      const shell = this.resolveShell(isHost);
+      const cwd = this.resolveCwd(isHost);
+      const env = this.buildSafeEnv();
+      const args = isHost ? ['-t', '1', '-m', '-u', '-i', '-n', shell, '-i'] : ['-i'];
+
       const ptyProc = pty.spawn(isHost ? '/usr/bin/nsenter' : shell, args, {
         name: 'xterm-256color',
         cols,
@@ -152,8 +155,8 @@ export class TerminalService {
         cwd
       });
 
-      this.socket.emit('term:output', WELCOME_BANNER);
-      this.socket.emit(
+      this.socket!.emit('term:output', WELCOME_BANNER);
+      this.socket!.emit(
         'term:output',
         isHost
           ? `\x1b[90mConnected to HOST (${os.hostname()})\x1b[0m\r\n\r\n`
@@ -188,18 +191,16 @@ export class TerminalService {
   private killPty(): void {
     if (!this.ptyProcess) return;
 
+    const pid = this.ptyProcess.pid;
     try {
-      logger.info('[Terminal] Killing PTY', { pid: this.ptyProcess.pid });
+      logger.info('[Terminal] Killing PTY', { pid });
       this.ptyProcess.kill();
-    } catch { }
-    finally {
+    } catch (err: any) {
+      logger.warn('[Terminal] Error killing PTY', { pid, error: err.message });
+    } finally {
       this.ptyProcess = null;
     }
   }
-
-  /* ───────────────────────────────
-     Helpers
-  ─────────────────────────────── */
 
   private resolveShell(isHost: boolean): string {
     if (isHost) {
@@ -222,18 +223,18 @@ export class TerminalService {
   }
 
   private buildSafeEnv(): NodeJS.ProcessEnv {
-    const user = process.env.USER || 'root';
+    const { API_KEY, ...safeEnv } = process.env;
+    const user = safeEnv.USER || 'root';
     const host = os.hostname();
     const ps1Colorized = `\x1b[1;32m${user}@${host}\x1b[0m:\x1b[1;34m$PWD\x1b[0m\$ \x1b[36m`;
 
     return {
-      ...process.env,
+      ...safeEnv,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
       PS1: ps1Colorized,
     };
   }
-
 
   private resolveSocketUrl(): string {
     try {
