@@ -16,8 +16,9 @@ RUN npm run build
 # --- Stage 2: Production Runner ---
 FROM node:22-alpine
 
-# util-linux provides nsenter for host-level terminal access
-RUN apk add --no-cache util-linux
+# util-linux: nsenter for host-level terminal access
+# bash: interactive shell with readline (arrow keys, tab completion, history)
+RUN apk add --no-cache util-linux bash
 
 WORKDIR /app
 

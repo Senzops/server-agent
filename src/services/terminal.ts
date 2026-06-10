@@ -234,8 +234,10 @@ export class TerminalService {
     };
 
     if (shell.includes('bash')) {
-      // \[...\] marks non-printing sequences so readline calculates cursor position correctly
       env.PS1 = `\\[\\e[1;32m\\]${user}@${host}\\[\\e[0m\\]:\\[\\e[1;34m\\]\\w\\[\\e[0m\\]\\$ `;
+      env.HISTSIZE = '5000';
+      env.HISTFILESIZE = '5000';
+      env.HISTCONTROL = 'ignoredups:erasedups';
     } else if (!shell.includes('zsh')) {
       // Plain prompt for sh — zsh uses its own prompt via .zshrc
       env.PS1 = `${user}@${host}:\\$ `;
