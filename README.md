@@ -33,7 +33,7 @@ chmod +x install_agent.sh
 sudo bash install_agent.sh
 ```
 
-### **Option 3: Non-Interactive (CI / Automation)**
+### **Option 3:   (CI / Automation)**
 
 All configuration is passed via environment variables:
 

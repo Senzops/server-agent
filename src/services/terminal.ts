@@ -134,7 +134,7 @@ export class TerminalService {
 
       const shell = this.resolveShell(isHost);
       const cwd = this.resolveCwd(isHost);
-      const env = this.buildSafeEnv();
+      const env = this.buildSafeEnv(shell);
       const args = isHost ? ['-t', '1', '-m', '-u', '-i', '-n', shell, '-i'] : ['-i'];
 
       const ptyProc = pty.spawn(isHost ? '/usr/bin/nsenter' : shell, args, {
@@ -222,18 +222,26 @@ export class TerminalService {
     return '/root';
   }
 
-  private buildSafeEnv(): NodeJS.ProcessEnv {
+  private buildSafeEnv(shell: string): NodeJS.ProcessEnv {
     const { API_KEY, ...safeEnv } = process.env;
     const user = safeEnv.USER || 'root';
     const host = os.hostname();
-    const ps1Colorized = `\x1b[1;32m${user}@${host}\x1b[0m:\x1b[1;34m$PWD\x1b[0m\$ \x1b[36m`;
 
-    return {
+    const env: NodeJS.ProcessEnv = {
       ...safeEnv,
       TERM: 'xterm-256color',
       COLORTERM: 'truecolor',
-      PS1: ps1Colorized,
     };
+
+    if (shell.includes('bash')) {
+      // \[...\] marks non-printing sequences so readline calculates cursor position correctly
+      env.PS1 = `\\[\\e[1;32m\\]${user}@${host}\\[\\e[0m\\]:\\[\\e[1;34m\\]\\w\\[\\e[0m\\]\\$ `;
+    } else if (!shell.includes('zsh')) {
+      // Plain prompt for sh — zsh uses its own prompt via .zshrc
+      env.PS1 = `${user}@${host}:\\$ `;
+    }
+
+    return env;
   }
 
   private resolveSocketUrl(): string {
